@@ -35,11 +35,34 @@ function renderMath(el) {
   });
 }
 
+function formatInlineMarkdown(str) {
+  if (!str) return "";
+  // Proteger bloques matemáticos ($$...$$, $...$, \[...\], \(...\)) para no alterar símbolos dentro de LaTeX
+  const mathBlocks = [];
+  const placeholder = (i) => `\u0000MATH_${i}\u0000`;
+  const protectedStr = str.replace(
+    /(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g,
+    (match) => {
+      mathBlocks.push(match);
+      return placeholder(mathBlocks.length - 1);
+    }
+  );
+
+  const formatted = protectedStr
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  return formatted.replace(/\u0000MATH_(\d+)\u0000/g, (_, idx) => mathBlocks[Number(idx)]);
+}
+
 function formatTextWithParagraphs(raw) {
   if (!raw) return "";
   return raw
     .split("\n\n")
-    .map((p) => `<p style="margin-bottom:0.55rem">${p.replace(/\n/g, "<br/>")}</p>`)
+    .map(
+      (p) =>
+        `<p style="margin-bottom:0.55rem">${formatInlineMarkdown(p).replace(/\n/g, "<br/>")}</p>`
+    )
     .join("");
 }
 
@@ -412,11 +435,11 @@ function renderLessonStep() {
       <div class="callout-grid">
         <div class="callout-box callout-ds">
           <strong>📊 Conexión con Ingeniería en Ciencia de Datos:</strong>
-          <p style="margin-top:0.25rem">${topic.ds_connection}</p>
+          <p style="margin-top:0.25rem">${formatInlineMarkdown(topic.ds_connection)}</p>
         </div>
         <div class="callout-box callout-uc">
           <strong>🎓 Estrategia de Interrogación UC (I1/I2/Examen):</strong>
-          <p style="margin-top:0.25rem">${topic.uc_exam_tip}</p>
+          <p style="margin-top:0.25rem">${formatInlineMarkdown(topic.uc_exam_tip)}</p>
         </div>
       </div>
 
@@ -424,15 +447,15 @@ function renderLessonStep() {
         <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.4rem">
           Ejemplo Resuelto Paso a Paso
         </div>
-        <div style="font-weight:700;margin-bottom:0.65rem">${we.problem}</div>
+        <div style="font-weight:700;margin-bottom:0.65rem">${formatInlineMarkdown(we.problem)}</div>
         ${we.steps
           .map(
             (st, idx) =>
-              `<div class="worked-step"><strong>Paso ${idx + 1}:</strong> ${st}</div>`
+              `<div class="worked-step"><strong>Paso ${idx + 1}:</strong> ${formatInlineMarkdown(st)}</div>`
           )
           .join("")}
         <div style="margin-top:0.65rem;padding-top:0.55rem;border-top:2px solid var(--border);font-weight:700;color:var(--emerald)">
-          Respuesta final: ${we.final_answer}
+          Respuesta final: ${formatInlineMarkdown(we.final_answer)}
         </div>
       </div>
     `;
@@ -464,7 +487,7 @@ function renderLessonStep() {
         <button class="btn-ghost" onclick="toggleHint()">💡 Ver Pista</button>
       </div>
 
-      <div class="question-prompt">${q.prompt}</div>
+      <div class="question-prompt">${formatInlineMarkdown(q.prompt)}</div>
 
       <div class="options-grid" id="question-options">
         ${q.options
@@ -472,7 +495,7 @@ function renderLessonStep() {
             (opt, idx) => `
           <button class="option-btn" id="opt-btn-${idx}" onclick="selectQuestionOption(${idx})">
             <span class="option-key">${keys[idx] || idx + 1}</span>
-            <span>${opt}</span>
+            <span>${formatInlineMarkdown(opt)}</span>
           </button>
         `
           )
@@ -480,7 +503,7 @@ function renderLessonStep() {
       </div>
 
       <div id="question-hint" class="hint-box" style="display:none">
-        <strong>Pista:</strong> ${q.hint}
+        <strong>Pista:</strong> ${formatInlineMarkdown(q.hint)}
       </div>
 
       <div id="question-feedback"></div>
@@ -543,7 +566,7 @@ async function verifyCurrentQuestion() {
   fb.innerHTML = `
     <div class="feedback-banner ${isCorrect ? "ok" : "err"}">
       <strong>${isCorrect ? "✓ ¡Correcto!" : "✗ Respuesta incorrecta."}</strong>
-      <div style="margin-top:0.3rem">${q.explanation}</div>
+      <div style="margin-top:0.3rem">${formatInlineMarkdown(q.explanation)}</div>
     </div>
   `;
   renderMath(fb);
@@ -687,14 +710,14 @@ function renderDiagnosticStep() {
       <span class="badge badge-lesson">Pregunta ${idx + 1} de ${items.length} · ${item.course_name}</span>
       <span style="font-size:0.78rem;color:var(--text-muted)">Evalúa: ${item.topic_title}</span>
     </div>
-    <div class="question-prompt">${q.prompt}</div>
+    <div class="question-prompt">${formatInlineMarkdown(q.prompt)}</div>
     <div class="options-grid" id="diag-options">
       ${q.options
         .map(
           (opt, i) => `
         <button class="option-btn" onclick="selectDiagOption(${i})">
           <span class="option-key">${keys[i]}</span>
-          <span>${opt}</span>
+          <span>${formatInlineMarkdown(opt)}</span>
         </button>
       `
         )
