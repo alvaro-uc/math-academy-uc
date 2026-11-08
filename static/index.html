@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Academy UC — Ingeniería en Ciencia de Datos</title>
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <img src="/assets/icon.svg" alt="MA" class="brand-logo" />
+      <div>
+        <div class="brand-title">Math Academy <span class="uc-badge">UC · Ciencia de Datos</span></div>
+        <div class="brand-subtitle">Entrenamiento Adaptativo · FIRe Spaced Repetition · Semestres 1–4</div>
+      </div>
+    </div>
+
+    <nav class="topbar-tabs" role="tablist">
+      <button class="nav-tab active" data-view="dashboard" id="tab-dashboard">
+        <span>1. Entrenamiento Diario</span>
+      </button>
+      <button class="nav-tab" data-view="graph" id="tab-graph">
+        <span>2. Grafo Curricular DAG</span>
+      </button>
+      <button class="nav-tab" data-view="courses" id="tab-courses">
+        <span>3. Malla &amp; Anticipación</span>
+      </button>
+    </nav>
+
+    <div class="topbar-right">
+      <div class="xp-pill" title="Progreso de tu meta diaria de XP (1 XP ≈ 1 min de práctica intensa)">
+        <div class="xp-pill-header">
+          <span class="xp-flame">⚡</span>
+          <span id="xp-today-label">0 / 35 XP hoy</span>
+        </div>
+        <div class="xp-bar-track">
+          <div class="xp-bar-fill" id="xp-bar-fill" style="width: 0%"></div>
+        </div>
+      </div>
+      <div class="total-xp-badge" id="total-xp-badge">0 XP Total</div>
+      <button class="btn-outline btn-sm" id="btn-open-diagnostic" title="Calibrar tu frontera actual con un test rápido">
+        Diagnóstico Inicial
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="workspace">
+    <!-- VIEW 1: DASHBOARD / ENTRENAMIENTO DIARIO -->
+    <section id="view-dashboard" class="view-panel active">
+      <div class="dashboard-grid">
+        <!-- Left column: Adaptive Task Queue -->
+        <div class="queue-column">
+          <div class="section-header">
+            <div>
+              <h2>Cola de Estudio Adaptativa (FIRe)</h2>
+              <p class="section-desc">
+                Seleccionada automáticamente en tu <strong>frontera de conocimiento</strong>. Al completar temas avanzados,
+                refuerzas implícitamente tus prerrequisitos sin repetir ejercicios básicos.
+              </p>
+            </div>
+            <div class="semester-selector-wrap">
+              <label for="select-semester">Foco actual:</label>
+              <select id="select-semester" class="select-minimal">
+                <option value="1">Semestre 1 (Actual)</option>
+                <option value="2">Semestre 2 (Anticipación)</option>
+                <option value="3">Semestre 3 (Anticipación)</option>
+                <option value="4">Semestre 4 (Anticipación)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="task-queue-list" class="task-queue-list"></div>
+
+          <!-- Quick Calibration Presets & Backup Sync -->
+          <div class="presets-card">
+            <div class="presets-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+              <span>Perfiles Rápidos de Simulación (1 clic) y Respaldo:</span>
+              <span id="storage-backend-badge" style="font-size:0.72rem;color:var(--text-muted);font-weight:500;">💾 Almacenamiento Local</span>
+            </div>
+            <div class="presets-actions">
+              <button class="btn-ghost btn-xs" data-preset="mid_sem1">
+                📍 Mitad Semestre 1 (I1/I2 Intro Cálculo + Álgebra)
+              </button>
+              <button class="btn-ghost btn-xs" data-preset="sem2_ready">
+                🚀 Anticipar Semestre 2 (Cálculo I + Álgebra Lineal CD)
+              </button>
+              <button class="btn-ghost btn-xs" data-preset="reset">
+                🔄 Reiniciar desde Cero
+              </button>
+              <button class="btn-ghost btn-xs" id="btn-export-backup" title="Descargar tu progreso en un archivo JSON">
+                ⬇️ Exportar Avance (.json)
+              </button>
+              <button class="btn-ghost btn-xs" id="btn-import-backup" title="Cargar progreso desde un archivo JSON">
+                ⬆️ Importar Avance
+              </button>
+              <input type="file" id="input-import-backup" accept=".json,application/json" style="display:none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column: Mastery Analytics & FIRe Status -->
+        <div class="stats-column">
+          <div class="stat-card">
+            <h3>Resumen de Maestría</h3>
+            <div class="kpi-grid">
+              <div class="kpi-box">
+                <div class="kpi-val" id="kpi-mastered">0/23</div>
+                <div class="kpi-label">Nodos Dominados</div>
+              </div>
+              <div class="kpi-box">
+                <div class="kpi-val" id="kpi-available">0</div>
+                <div class="kpi-label">En tu Frontera</div>
+              </div>
+              <div class="kpi-box">
+                <div class="kpi-val" id="kpi-reviews">0</div>
+                <div class="kpi-label">Repasos FIRe</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <h3>Progreso por Ramo UC</h3>
+            <div id="sidebar-courses-progress" class="courses-mini-list"></div>
+          </div>
+
+          <div class="stat-card">
+            <h3>Cómo funciona tu Motor FIRe</h3>
+            <ul class="fire-explainer">
+              <li><strong>Frontera de Conocimiento:</strong> Solo desbloqueas un tema cuando dominas ($\ge 75\%$) sus prerrequisitos directos.</li>
+              <li><strong>Repetición Implícita Fraccionaria (FIRe):</strong> Practicar <em>Regla de la Cadena</em> o <em>Mínimos Cuadrados</em> propaga crédito de memoria hacia <em>Derivadas</em>, <em>Límites</em> y <em>Vectores</em> automáticamente.</li>
+              <li><strong>Generador Infinito:</strong> Cada sesión combina preguntas conceptuales tipo Interrogación UC con problemas paramétricos nuevos.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: GRAFO CURRICULAR DAG -->
+    <section id="view-graph" class="view-panel">
+      <div class="graph-header">
+        <div>
+          <h2>Grafo de Conocimiento (DAG Semestres 1 a 4)</h2>
+          <p class="section-desc">
+            Haz clic en cualquier nodo para inspeccionar sus conexiones <strong>FIRe</strong> (crédito implícito) o iniciar su entrenamiento.
+          </p>
+        </div>
+        <div class="graph-legend">
+          <span class="legend-item"><span class="dot dot-mastered"></span> Dominado</span>
+          <span class="legend-item"><span class="dot dot-review"></span> Repaso FIRe</span>
+          <span class="legend-item"><span class="dot dot-available"></span> Disponible (Frontera)</span>
+          <span class="legend-item"><span class="dot dot-locked"></span> Bloqueado (Falta Prerreq)</span>
+        </div>
+      </div>
+
+      <div class="graph-layout">
+        <div class="dag-scroll-container" id="dag-container">
+          <svg id="dag-svg" class="dag-svg"></svg>
+          <div id="dag-nodes" class="dag-nodes"></div>
+        </div>
+
+        <aside class="node-inspector" id="node-inspector">
+          <div class="inspector-empty">Selecciona un tópico del grafo para ver sus prerrequisitos, pesos FIRe y conexión con Ciencia de Datos.</div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- VIEW 3: MALLA & ANTICIPACIÓN -->
+    <section id="view-courses" class="view-panel">
+      <div class="section-header">
+        <div>
+          <h2>Malla Cuantitativa — Lic. en Ingeniería en Ciencia de Datos UC</h2>
+          <p class="section-desc">
+            Explora todos los tópicos organizados por semestre y ramo para preparar Interrogaciones (I1, I2, I3) o adelantar cursos futuros.
+          </p>
+        </div>
+      </div>
+      <div id="courses-catalog" class="courses-catalog"></div>
+    </section>
+  </main>
+
+  <!-- MODAL: SESIÓN DE ENTRENAMIENTO (MICRO-LECCIÓN + PRÁCTICA ADAPTATIVA) -->
+  <div id="lesson-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-window lesson-window">
+      <div class="modal-topbar">
+        <div>
+          <span class="modal-course-tag" id="lesson-course-tag">MAT1600</span>
+          <h3 id="lesson-title">Título del Tópico</h3>
+        </div>
+        <div class="lesson-stepper" id="lesson-stepper"></div>
+        <button class="btn-close" id="btn-close-lesson" title="Cerrar (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body" id="lesson-body"></div>
+
+      <div class="modal-footer" id="lesson-footer"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: DIAGNÓSTICO INICIAL -->
+  <div id="diagnostic-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-window diagnostic-window">
+      <div class="modal-topbar">
+        <div>
+          <span class="modal-course-tag">Calibración Adaptativa UC</span>
+          <h3>Diagnóstico de Frontera de Conocimiento</h3>
+        </div>
+        <button class="btn-close" id="btn-close-diagnostic">✕</button>
+      </div>
+      <div class="modal-body" id="diagnostic-body"></div>
+      <div class="modal-footer" id="diagnostic-footer"></div>
+    </div>
+  </div>
+
+  <script src="/vendor/katex/katex.min.js"></script>
+  <script src="/vendor/katex/auto-render.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

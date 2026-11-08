@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.env.*
+!.env.example
+.vercel/
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
