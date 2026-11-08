@@ -123,7 +123,7 @@ async function apiFetch(url, options = {}) {
   if (res.status === 401) {
     setAuthToken("");
     APP_STATE = null;
-    showAuthGate("Sesión no iniciada o expirada. Ingresa tu contraseña para continuar.");
+    showAuthGate();
     throw new Error("Unauthorized");
   }
   return res;

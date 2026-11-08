@@ -13,29 +13,23 @@
   <div id="auth-gate" class="auth-gate">
     <div class="auth-card">
       <img src="/assets/icon.svg" alt="MAT UC" class="auth-logo" />
-      <div class="auth-badge">Facultad de Matemáticas · UC</div>
       <h1 class="auth-title">Math Academy UC</h1>
-      <p class="auth-subtitle">
-        Plataforma personal de entrenamiento adaptativo (FIRe). Ingresa tu contraseña para desbloquear tu sesión en esta pestaña.
-      </p>
+      <p class="auth-subtitle">Plataforma personal de entrenamiento adaptativo</p>
       <form id="auth-form" class="auth-form" autocomplete="on">
         <input
           type="password"
           id="auth-password-input"
           class="auth-input"
-          placeholder="Contraseña de acceso..."
+          placeholder="Contraseña"
           autocomplete="current-password"
           required
           autofocus
         />
-        <div id="auth-error" class="auth-error hidden">Contraseña incorrecta. Intenta nuevamente.</div>
+        <div id="auth-error-msg" class="auth-error hidden"></div>
         <button type="submit" id="auth-submit-btn" class="btn-primary auth-btn">
-          Desbloquear Plataforma →
+          Ingresar
         </button>
       </form>
-      <div class="auth-footer-note">
-        🔒 Protegido con firma criptográfica HMAC-SHA256 en el servidor. La sesión dura mientras mantengas esta pestaña abierta.
-      </div>
     </div>
   </div>
 
