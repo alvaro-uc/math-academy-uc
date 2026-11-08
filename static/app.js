@@ -66,10 +66,83 @@ function formatTextWithParagraphs(raw) {
     .join("");
 }
 
+const SESSION_TOKEN_KEY = "matuc_auth_token";
+
+function getAuthToken() {
+  try {
+    return sessionStorage.getItem(SESSION_TOKEN_KEY) || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function setAuthToken(token) {
+  try {
+    if (token) {
+      sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    } else {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    }
+  } catch (_) {}
+}
+
+function showAuthGate(errorMsg = "") {
+  const gate = document.getElementById("auth-gate");
+  if (gate) gate.classList.remove("hidden");
+  const errEl = document.getElementById("auth-error-msg");
+  if (errEl) {
+    if (errorMsg) {
+      errEl.textContent = errorMsg;
+      errEl.classList.remove("hidden");
+    } else {
+      errEl.textContent = "";
+      errEl.classList.add("hidden");
+    }
+  }
+  const input = document.getElementById("auth-password-input");
+  if (input) {
+    input.value = "";
+    setTimeout(() => input.focus(), 50);
+  }
+}
+
+function hideAuthGate() {
+  const gate = document.getElementById("auth-gate");
+  if (gate) gate.classList.add("hidden");
+  const errEl = document.getElementById("auth-error-msg");
+  if (errEl) errEl.classList.add("hidden");
+}
+
+async function apiFetch(url, options = {}) {
+  const token = getAuthToken();
+  const headers = Object.assign({}, options.headers || {});
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    setAuthToken("");
+    APP_STATE = null;
+    showAuthGate("Sesión no iniciada o expirada. Ingresa tu contraseña para continuar.");
+    throw new Error("Unauthorized");
+  }
+  return res;
+}
+
 async function fetchState() {
-  const res = await fetch("/api/state");
-  APP_STATE = await res.json();
-  renderAll();
+  const token = getAuthToken();
+  if (!token) {
+    showAuthGate();
+    return;
+  }
+  try {
+    const res = await apiFetch("/api/state");
+    APP_STATE = await res.json();
+    hideAuthGate();
+    renderAll();
+  } catch (_) {
+    // 401 is handled inside apiFetch
+  }
 }
 
 function renderAll() {
@@ -378,7 +451,7 @@ function renderCoursesCatalog() {
    ============================================================================ */
 
 async function startLesson(topicId, taskType = "lesson") {
-  const res = await fetch(`/api/topic/${topicId}`);
+  const res = await apiFetch(`/api/topic/${topicId}`);
   if (!res.ok) return;
   const topic = await res.json();
 
@@ -580,7 +653,7 @@ async function nextLessonStep() {
   const totalQuestions = LESSON_SESSION.topic.questions.length;
   if (LESSON_SESSION.stepIndex === totalQuestions) {
     // Enviar resultado al motor FIRe
-    const res = await fetch("/api/complete", {
+    const res = await apiFetch("/api/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -675,7 +748,7 @@ function renderLessonSummary() {
    ============================================================================ */
 
 async function openDiagnosticModal() {
-  const res = await fetch("/api/diagnostic");
+  const res = await apiFetch("/api/diagnostic");
   const data = await res.json();
   DIAG_SESSION = {
     items: data.items || [],
@@ -759,7 +832,7 @@ function submitDiagQuestion() {
 
 async function finishDiagnostic() {
   const sem = parseInt(document.getElementById("select-semester").value || "1", 10);
-  const res = await fetch("/api/diagnostic", {
+  const res = await apiFetch("/api/diagnostic", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -794,6 +867,50 @@ async function finishDiagnostic() {
    ============================================================================ */
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Auth Gate Form
+  const authForm = document.getElementById("auth-form");
+  if (authForm) {
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("auth-password-input");
+      const btn = document.getElementById("auth-submit-btn");
+      const password = input ? input.value : "";
+      if (!password) return;
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok && data.token) {
+          setAuthToken(data.token);
+          hideAuthGate();
+          await fetchState();
+        } else {
+          showAuthGate(data.error || "Contraseña incorrecta.");
+        }
+      } catch (_) {
+        showAuthGate("Error de conexión al verificar la contraseña.");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+  }
+
+  // Logout / Lock Button
+  const btnLogout = document.getElementById("btn-logout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", () => {
+      setAuthToken("");
+      APP_STATE = null;
+      closeLessonModal();
+      closeDiagnosticModal();
+      showAuthGate();
+    });
+  }
+
   // Navigation Tabs
   document.querySelectorAll(".nav-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -811,7 +928,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Semester focus selector
   document.getElementById("select-semester").addEventListener("change", async (e) => {
     const sem = parseInt(e.target.value, 10);
-    const res = await fetch("/api/profile", {
+    const res = await apiFetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ current_semester: sem }),
@@ -825,7 +942,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-preset]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const preset = btn.getAttribute("data-preset");
-      const res = await fetch("/api/profile", {
+      const res = await apiFetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ preset_mode: preset }),
@@ -840,7 +957,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnExport = document.getElementById("btn-export-backup");
   if (btnExport) {
     btnExport.addEventListener("click", async () => {
-      const res = await fetch("/api/backup");
+      const res = await apiFetch("/api/backup");
       const payload = await res.json();
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -864,7 +981,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const text = await file.text();
         const payload = JSON.parse(text);
-        const res = await fetch("/api/backup", {
+        const res = await apiFetch("/api/backup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),

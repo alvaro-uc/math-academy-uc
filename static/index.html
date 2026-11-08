@@ -9,6 +9,36 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <!-- PANTALLA DE ACCESO PROTEGIDO (SERVER-VERIFIED AUTH GATE) -->
+  <div id="auth-gate" class="auth-gate">
+    <div class="auth-card">
+      <img src="/assets/icon.svg" alt="MAT UC" class="auth-logo" />
+      <div class="auth-badge">Facultad de Matemáticas · UC</div>
+      <h1 class="auth-title">Math Academy UC</h1>
+      <p class="auth-subtitle">
+        Plataforma personal de entrenamiento adaptativo (FIRe). Ingresa tu contraseña para desbloquear tu sesión en esta pestaña.
+      </p>
+      <form id="auth-form" class="auth-form" autocomplete="on">
+        <input
+          type="password"
+          id="auth-password-input"
+          class="auth-input"
+          placeholder="Contraseña de acceso..."
+          autocomplete="current-password"
+          required
+          autofocus
+        />
+        <div id="auth-error" class="auth-error hidden">Contraseña incorrecta. Intenta nuevamente.</div>
+        <button type="submit" id="auth-submit-btn" class="btn-primary auth-btn">
+          Desbloquear Plataforma →
+        </button>
+      </form>
+      <div class="auth-footer-note">
+        🔒 Protegido con firma criptográfica HMAC-SHA256 en el servidor. La sesión dura mientras mantengas esta pestaña abierta.
+      </div>
+    </div>
+  </div>
+
   <!-- Top Bar -->
   <header class="topbar">
     <div class="topbar-left">
@@ -44,6 +74,9 @@
       <div class="total-xp-badge" id="total-xp-badge">0 XP Total</div>
       <button class="btn-outline btn-sm" id="btn-open-diagnostic" title="Calibrar tu frontera actual con un test rápido">
         Diagnóstico Inicial
+      </button>
+      <button class="btn-ghost btn-sm" id="btn-logout" title="Bloquear sesión en esta pestaña">
+        🔒 Bloquear
       </button>
     </div>
   </header>

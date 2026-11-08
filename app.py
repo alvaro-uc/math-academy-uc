@@ -5,10 +5,13 @@ Servidor Local para Math Academy UC — Ingeniería en Ciencia de Datos
 Cero dependencias externas (usa Python stdlib `http.server` + `sqlite3`).
 """
 
+import hashlib
+import hmac
 import json
 import mimetypes
 import os
 import sys
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -22,9 +25,106 @@ mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
 mimetypes.add_type("image/svg+xml", ".svg")
 
+# Hash PBKDF2-HMAC-SHA256 (310,000 iteraciones) de la contraseña del propietario.
+# También se puede sobreescribir mediante la variable de entorno APP_PASSWORD.
+_DEFAULT_PBKDF2_SALT = "d6b636e6e3e0dd1d86ad0ce52a3d8b80"
+_DEFAULT_PBKDF2_HASH = "ed96df7388a116d297f777fd4cd504f5210459765d4f9f14cdc73ab85ae3b6e8"
+_DEFAULT_PBKDF2_ITER = 310000
+_TOKEN_TTL_SECONDS = 12 * 3600  # 12 horas de validez máxima por sesión de pestaña
 
-def _dispatch_request(method, path, raw_body=b""):
+
+def _get_signing_key():
+    env_pw = os.environ.get("APP_PASSWORD")
+    if env_pw:
+        return hashlib.pbkdf2_hmac(
+            "sha256", env_pw.encode("utf-8"), bytes.fromhex(_DEFAULT_PBKDF2_SALT), 100000
+        )
+    return bytes.fromhex(_DEFAULT_PBKDF2_HASH)
+
+
+def _verify_password(candidate):
+    if not isinstance(candidate, str) or not candidate:
+        return False
+    env_pw = os.environ.get("APP_PASSWORD")
+    if env_pw:
+        return hmac.compare_digest(candidate.encode("utf-8"), env_pw.encode("utf-8"))
+    dk = hashlib.pbkdf2_hmac(
+        "sha256",
+        candidate.encode("utf-8"),
+        bytes.fromhex(_DEFAULT_PBKDF2_SALT),
+        _DEFAULT_PBKDF2_ITER,
+    ).hex()
+    return hmac.compare_digest(dk, _DEFAULT_PBKDF2_HASH)
+
+
+def _issue_auth_token():
+    exp = int(time.time()) + _TOKEN_TTL_SECONDS
+    msg = f"matuc-session:{exp}".encode("utf-8")
+    sig = hmac.new(_get_signing_key(), msg, hashlib.sha256).hexdigest()
+    return f"{exp}.{sig}"
+
+
+def _verify_auth_token(token):
+    if not token or not isinstance(token, str) or "." not in token:
+        return False
+    try:
+        exp_str, sig = token.split(".", 1)
+        exp = int(exp_str)
+    except ValueError:
+        return False
+    if time.time() > exp:
+        return False
+    msg = f"matuc-session:{exp}".encode("utf-8")
+    expected_sig = hmac.new(_get_signing_key(), msg, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected_sig)
+
+
+def _extract_bearer_token(auth_header):
+    if not auth_header or not isinstance(auth_header, str):
+        return ""
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return auth_header.strip()
+
+
+def _dispatch_request(method, path, raw_body=b"", auth_header=""):
     """Despachador común para BaseHTTPRequestHandler local y WSGI (Vercel)."""
+    token = _extract_bearer_token(auth_header)
+
+    # Rutas públicas de autenticación
+    if path == "/api/auth/status" and method == "GET":
+        return (
+            200,
+            "application/json; charset=utf-8",
+            json.dumps({"authenticated": _verify_auth_token(token)}, ensure_ascii=False).encode("utf-8"),
+        )
+
+    if path == "/api/auth/login" and method == "POST":
+        try:
+            body = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+        except Exception:
+            body = {}
+        password = body.get("password", "")
+        if _verify_password(password):
+            return (
+                200,
+                "application/json; charset=utf-8",
+                json.dumps({"ok": True, "token": _issue_auth_token()}, ensure_ascii=False).encode("utf-8"),
+            )
+        return (
+            401,
+            "application/json; charset=utf-8",
+            json.dumps({"ok": False, "error": "Contraseña incorrecta"}, ensure_ascii=False).encode("utf-8"),
+        )
+
+    # Proteger TODAS las demás rutas /api/* en el servidor
+    if path.startswith("/api/") and not _verify_auth_token(token):
+        return (
+            401,
+            "application/json; charset=utf-8",
+            json.dumps({"error": "No autorizado. Inicia sesión para acceder."}, ensure_ascii=False).encode("utf-8"),
+        )
+
     if method == "GET":
         if path == "/api/state":
             st = engine.get_full_state()
@@ -120,7 +220,8 @@ class handler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         length = int(self.headers.get("Content-Length", "0")) if method == "POST" else 0
         raw_body = self.rfile.read(length) if length > 0 else b""
-        status, ctype, data = _dispatch_request(method, parsed.path, raw_body)
+        auth_header = self.headers.get("Authorization", "")
+        status, ctype, data = _dispatch_request(method, parsed.path, raw_body, auth_header)
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
@@ -152,10 +253,12 @@ def app(environ, start_response):
     except ValueError:
         length = 0
     raw_body = environ["wsgi.input"].read(length) if length > 0 and "wsgi.input" in environ else b""
-    status_code, ctype, data = _dispatch_request(method, path, raw_body)
+    auth_header = environ.get("HTTP_AUTHORIZATION", "")
+    status_code, ctype, data = _dispatch_request(method, path, raw_body, auth_header)
     status_map = {
         200: "200 OK",
         400: "400 Bad Request",
+        401: "401 Unauthorized",
         403: "403 Forbidden",
         404: "404 Not Found",
         405: "405 Method Not Allowed",
