@@ -67,6 +67,7 @@ function formatTextWithParagraphs(raw) {
 }
 
 const SESSION_TOKEN_KEY = "matuc_auth_token";
+const LOCAL_BACKUP_KEY = "matuc_progress_backup_v1";
 
 function getAuthToken() {
   try {
@@ -83,6 +84,27 @@ function setAuthToken(token) {
     } else {
       sessionStorage.removeItem(SESSION_TOKEN_KEY);
     }
+  } catch (_) {}
+}
+
+function getLocalBackup() {
+  try {
+    const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.profile && parsed.topic_state) {
+      return parsed;
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveLocalBackup(snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || !snapshot.profile) return;
+  try {
+    localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(snapshot));
   } catch (_) {}
 }
 
@@ -136,7 +158,14 @@ async function fetchState() {
     return;
   }
   try {
-    const res = await apiFetch("/api/state");
+    const clientBackup = getLocalBackup();
+    const res = clientBackup
+      ? await apiFetch("/api/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_backup: clientBackup }),
+        })
+      : await apiFetch("/api/state");
     APP_STATE = await res.json();
     hideAuthGate();
     renderAll();
@@ -147,6 +176,9 @@ async function fetchState() {
 
 function renderAll() {
   if (!APP_STATE) return;
+  if (APP_STATE.backup_snapshot) {
+    saveLocalBackup(APP_STATE.backup_snapshot);
+  }
   renderTopBar();
   renderDashboard();
   renderDAG();
@@ -652,7 +684,7 @@ async function verifyCurrentQuestion() {
 async function nextLessonStep() {
   const totalQuestions = LESSON_SESSION.topic.questions.length;
   if (LESSON_SESSION.stepIndex === totalQuestions) {
-    // Enviar resultado al motor FIRe
+    // Enviar resultado al motor FIRe junto con el respaldo local para entornos serverless
     const res = await apiFetch("/api/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -661,6 +693,7 @@ async function nextLessonStep() {
         correct_count: LESSON_SESSION.correctCount,
         total_count: totalQuestions,
         task_type: LESSON_SESSION.taskType,
+        client_backup: getLocalBackup(),
       }),
     });
     const data = await res.json();
@@ -838,6 +871,7 @@ async function finishDiagnostic() {
     body: JSON.stringify({
       results: DIAG_SESSION.resultsByTopic,
       target_semester: sem,
+      client_backup: getLocalBackup(),
     }),
   });
   const data = await res.json();
@@ -931,7 +965,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const res = await apiFetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ current_semester: sem }),
+      body: JSON.stringify({
+        current_semester: sem,
+        client_backup: getLocalBackup(),
+      }),
     });
     const data = await res.json();
     APP_STATE = data.state;
@@ -957,8 +994,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnExport = document.getElementById("btn-export-backup");
   if (btnExport) {
     btnExport.addEventListener("click", async () => {
-      const res = await apiFetch("/api/backup");
-      const payload = await res.json();
+      const localSnap = (APP_STATE && APP_STATE.backup_snapshot) || getLocalBackup();
+      let payload = localSnap;
+      if (!payload) {
+        const res = await apiFetch("/api/backup");
+        payload = await res.json();
+      }
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

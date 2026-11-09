@@ -9,6 +9,7 @@ import datetime
 import json
 import math
 import os
+import random
 import sqlite3
 
 from curriculum import COURSES, TOPICS
@@ -238,12 +239,13 @@ def init_db():
         """
     )
     cur.execute("SELECT COUNT(*) AS cnt FROM user_profile")
-    if cur.fetchone()["cnt"] == 0:
+    is_new_profile = cur.fetchone()["cnt"] == 0
+    if is_new_profile:
         today = datetime.date.today().isoformat()
         cur.execute(
             """
             INSERT INTO user_profile (id, name, current_semester, daily_goal_xp, total_xp, streak_days, last_active_date, diagnostic_completed)
-            VALUES (1, 'Estudiante Lic. Ingeniería en Ciencia de Datos UC', 1, 35, 0, 1, ?, 0)
+            VALUES (1, 'Estudiante Lic. Ingeniería en Ciencia de Datos UC', 1, 35, 45, 1, ?, 1)
             """,
             (today,),
         )
@@ -255,18 +257,35 @@ def init_db():
             """,
             (t["id"],),
         )
+    if is_new_profile:
+        now_ts = datetime.datetime.now().timestamp()
+        base_mastered = [
+            ("ic_desigualdades", 0.92, 4.0, now_ts - 5.0 * 86400.0),  # Vencido para repaso FIRe
+            ("ic_funciones", 0.88, 6.0, now_ts - 1.5 * 86400.0),
+            ("iag_logica_conjuntos", 0.94, 7.0, now_ts - 2.0 * 86400.0),
+            ("iag_induccion_sumatorias", 0.86, 5.0, now_ts - 1.0 * 86400.0),
+        ]
+        for tid, m, s, lts in base_mastered:
+            cur.execute(
+                """
+                UPDATE topic_state
+                SET mastery = ?, stability_days = ?, repetitions = 2, last_practiced_ts = ?, next_review_ts = ?
+                WHERE topic_id = ?
+                """,
+                (m, s, lts, lts + s * 86400.0, tid),
+            )
     conn.commit()
     conn.close()
 
 
 def compute_retention(row, now_ts=None):
-    """Calcula la retención de memoria R(t) = exp(-Δt / S) y el estado del nodo."""
+    """Calcula la retención de memoria R(t) = 0.78^(Δt / S) y el estado de repaso del nodo."""
     if now_ts is None:
         now_ts = datetime.datetime.now().timestamp()
-    mastery = float(row["mastery"])
-    last_ts = row["last_practiced_ts"]
-    stability = max(0.5, float(row["stability_days"]))
-    reps = int(row["repetitions"])
+    mastery = float(row.get("mastery", 0.0))
+    last_ts = row.get("last_practiced_ts")
+    stability = max(0.5, float(row.get("stability_days", 2.0)))
+    reps = int(row.get("repetitions", 0))
 
     if reps == 0 or last_ts is None or mastery <= 0.05:
         return {
@@ -276,13 +295,15 @@ def compute_retention(row, now_ts=None):
         }
 
     days_elapsed = max(0.0, (now_ts - float(last_ts)) / 86400.0)
-    retention = mastery * math.exp(-days_elapsed / stability)
-    due = (row["next_review_ts"] is not None and now_ts >= float(row["next_review_ts"])) or (
-        mastery >= 0.75 and retention < 0.78
-    )
+    # R(t) comienza en 1.0 tras practicar (Δt = 0) y alcanza el umbral 0.78 en Δt = S (next_review_ts)
+    retention = math.pow(0.78, days_elapsed / stability)
+    if row.get("next_review_ts") is not None:
+        due = mastery >= 0.75 and now_ts >= float(row["next_review_ts"])
+    else:
+        due = mastery >= 0.75 and retention <= 0.78
     return {
         "retention": round(min(1.0, max(0.0, retention)), 3),
-        "days_elapsed": round(days_elapsed, 2),
+        "days_elapsed": round(days_elapsed, 4),
         "due_for_review": bool(due),
     }
 
@@ -313,7 +334,8 @@ def get_full_state():
     conn = get_conn()
     cur = conn.cursor()
 
-    profile = dict(cur.execute("SELECT * FROM user_profile WHERE id = 1").fetchone())
+    profile_row = dict(cur.execute("SELECT * FROM user_profile WHERE id = 1").fetchone())
+    profile = dict(profile_row)
     today_str = datetime.date.today().isoformat()
 
     # XP ganado hoy
@@ -337,6 +359,7 @@ def get_full_state():
         r["topic_id"]: dict(r)
         for r in cur.execute("SELECT * FROM topic_state").fetchall()
     }
+    xp_logs = [dict(r) for r in cur.execute("SELECT * FROM xp_log ORDER BY id ASC").fetchall()]
     conn.close()
 
     now_ts = datetime.datetime.now().timestamp()
@@ -388,6 +411,7 @@ def get_full_state():
                 "status": status,
                 "mastery": round(mastery, 2),
                 "retention": ret_info["retention"],
+                "days_elapsed": ret_info["days_elapsed"],
                 "stability_days": round(float(st.get("stability_days", 2.0)), 1),
                 "repetitions": int(st.get("repetitions", 0)),
                 "due_for_review": ret_info["due_for_review"],
@@ -414,13 +438,23 @@ def get_full_state():
             }
         )
 
+    backend_name = get_storage_backend_name()
     return {
-        "storage_backend": get_storage_backend_name(),
+        "storage_backend": backend_name,
         "profile": profile,
         "courses": course_summaries,
         "topics": enriched_topics,
         "recommendations": recommendations,
         "activity_7d": seven_days,
+        "backup_snapshot": {
+            "version": 1,
+            "exported_at": datetime.datetime.now().isoformat(),
+            "updated_at_ts": now_ts,
+            "storage_backend": backend_name,
+            "profile": profile_row,
+            "topic_state": list(raw_states.values()),
+            "xp_log": xp_logs,
+        },
     }
 
 
@@ -464,8 +498,20 @@ def build_recommendations(enriched_topics, current_semester):
             "available": 2.5,
         }.get(t["status"], 0.0)
 
+        # Si el estudiante acaba de intentar este nodo hace menos de ~30 min y quedó en progreso,
+        # rotamos la cola para no bloquear la primera tarjeta con el mismo tema inmediatamente.
+        recency_penalty = (
+            -1.5
+            if (
+                t["status"] == "in_progress"
+                and t.get("repetitions", 0) > 0
+                and t.get("days_elapsed", 99.0) < 0.02
+            )
+            else 0.0
+        )
+
         unlock_bonus = 0.35 * len(t["unlocks"])
-        return status_bonus + sem_bonus + (2.5 * covered_due) + unlock_bonus
+        return status_bonus + sem_bonus + (2.5 * covered_due) + unlock_bonus + recency_penalty
 
     ranked = sorted(candidates, key=score_candidate, reverse=True)
 
@@ -488,6 +534,9 @@ def build_recommendations(enriched_topics, current_semester):
         elif t["semester"] > current_semester:
             task_type = "anticipation"
             tag_label = f"Anticipación Semestre {t['semester']}"
+        elif t["status"] == "in_progress":
+            task_type = "lesson"
+            tag_label = f"En Progreso · Semestre {t['semester']}"
         else:
             task_type = "lesson"
             tag_label = f"Frontera Semestre {t['semester']}"
@@ -538,6 +587,19 @@ def build_recommendations(enriched_topics, current_semester):
     return tasks
 
 
+def _shuffle_question_options(q, is_parametric=False):
+    """Copia una pregunta y baraja sus alternativas actualizando correct_index."""
+    q_copy = dict(q, is_parametric=is_parametric)
+    opts = list(q_copy.get("options", []))
+    corr_idx = int(q_copy.get("correct_index", 0))
+    if 0 <= corr_idx < len(opts):
+        correct_opt = opts[corr_idx]
+        random.shuffle(opts)
+        q_copy["options"] = opts
+        q_copy["correct_index"] = opts.index(correct_opt)
+    return q_copy
+
+
 def get_topic_lesson_payload(topic_id):
     """Devuelve la lección completa con preguntas curadas + preguntas paramétricas generadas al vuelo."""
     t = TOPICS_BY_ID.get(topic_id)
@@ -545,7 +607,7 @@ def get_topic_lesson_payload(topic_id):
         return None
     course = COURSES_BY_ID[t["course_id"]]
     dynamic_qs = generate_parametric_questions(t["generator_type"], count=2)
-    curated_qs = [dict(q, is_parametric=False) for q in t["questions"]]
+    curated_qs = [_shuffle_question_options(q, is_parametric=False) for q in t["questions"]]
     all_questions = curated_qs + dynamic_qs
 
     implicit_map = get_Transitive_Encompassed(topic_id)
@@ -594,6 +656,7 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
 
     now_ts = datetime.datetime.now().timestamp()
     today_str = datetime.date.today().isoformat()
+    yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
 
     conn = get_conn()
     cur = conn.cursor()
@@ -608,15 +671,23 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
     reps = int(st["repetitions"])
 
     if passed:
-        new_mastery = min(1.0, max(old_mastery, 0.72 + 0.28 * score_ratio))
+        new_mastery = min(1.0, max(old_mastery, 0.75 + 0.25 * score_ratio))
         growth_factor = 1.8 + 0.9 * score_ratio
-        new_stability = min(90.0, old_stability * growth_factor if reps > 0 else 3.5)
+        new_stability = min(90.0, old_stability * growth_factor if reps > 0 else 4.0)
         new_reps = reps + 1
     else:
-        # Penalización suave y re-agendamiento inmediato
-        new_mastery = max(0.25, old_mastery * 0.75 if old_mastery > 0 else 0.35)
-        new_stability = max(1.0, old_stability * 0.6)
-        new_reps = reps
+        if old_mastery >= 0.75 or task_type == "review":
+            # Era un tópico ya dominado / en repaso espaciado: registramos el repaso hoy,
+            # acortamos su intervalo para reforzar pronto, sin bloquear los temas posteriores.
+            new_mastery = max(0.75, round(old_mastery - 0.05, 2))
+            new_stability = max(1.0, round(old_stability * 0.55, 1))
+            new_reps = reps + 1
+        else:
+            # Lección nueva en progreso: acumula maestría progresivamente con cada práctica
+            step_gain = 0.25 + 0.35 * score_ratio
+            new_mastery = min(1.0, max(0.35, round(old_mastery + step_gain, 2)))
+            new_stability = 2.5 if new_mastery >= 0.75 else 2.0
+            new_reps = reps + 1
 
     next_review_ts = now_ts + new_stability * 86400.0
     cur.execute(
@@ -645,7 +716,8 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
 
     # Propagación FIRe (Fractional Implicit Repetition) a sub-tópicos abarcados
     implicit_boosted = []
-    if passed:
+    if passed or score_ratio >= 0.33:
+        eff_ratio = score_ratio if passed else score_ratio * 0.5
         implicit_weights = get_Transitive_Encompassed(topic_id)
         for sub_id, weight in implicit_weights.items():
             sub_row = cur.execute(
@@ -656,8 +728,8 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
             sub_m = float(sub_row["mastery"])
             sub_s = max(1.5, float(sub_row["stability_days"]))
             if sub_m > 0.0:
-                boosted_s = min(90.0, sub_s * (1.0 + 0.55 * weight * score_ratio))
-                boosted_m = min(1.0, max(sub_m, sub_m + 0.12 * weight))
+                boosted_s = min(90.0, sub_s * (1.0 + 0.55 * weight * eff_ratio))
+                boosted_m = min(1.0, max(sub_m, sub_m + 0.12 * weight * eff_ratio))
                 sub_next_ts = now_ts + boosted_s * 86400.0
                 cur.execute(
                     """
@@ -681,7 +753,7 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
     if passed:
         xp_earned = base_xp + (3 if score_ratio == 1.0 else 0)
     else:
-        xp_earned = max(2, int(base_xp * 0.25 * score_ratio))
+        xp_earned = max(3, int(round(base_xp * max(0.3, 0.5 * score_ratio))))
 
     cur.execute(
         """
@@ -699,20 +771,30 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
         ),
     )
 
+    prof_row = cur.execute("SELECT streak_days, last_active_date FROM user_profile WHERE id = 1").fetchone()
+    old_streak = int(prof_row["streak_days"]) if prof_row else 1
+    last_date = prof_row["last_active_date"] if prof_row else None
+    if last_date == today_str:
+        new_streak = old_streak
+    elif last_date == yesterday_str:
+        new_streak = old_streak + 1
+    else:
+        new_streak = max(1, old_streak)
+
     cur.execute(
         """
         UPDATE user_profile
-        SET total_xp = total_xp + ?, last_active_date = ?
+        SET total_xp = total_xp + ?, streak_days = ?, last_active_date = ?
         WHERE id = 1
         """,
-        (xp_earned, today_str),
+        (xp_earned, new_streak, today_str),
     )
 
     conn.commit()
     conn.close()
 
     return {
-        "passed": passed,
+        "passed": passed or new_mastery >= 0.75,
         "score_ratio": round(score_ratio, 2),
         "xp_earned": xp_earned,
         "new_mastery": round(new_mastery, 2),
@@ -977,3 +1059,45 @@ def import_backup_payload(payload):
     conn.commit()
     conn.close()
     return get_full_state()
+
+
+def ensure_hydrated_from_client(client_backup):
+    """
+    Sincroniza el estado enviado por el navegador (`client_backup`) con la base SQLite
+    cuando se ejecuta en entorno serverless efímero (/tmp en Vercel) o cuando la base
+    local está vacía/desactualizada respecto al respaldo del cliente.
+    """
+    if not isinstance(client_backup, dict):
+        return False
+    if "profile" not in client_backup or "topic_state" not in client_backup:
+        return False
+    if get_storage_backend_name() != "sqlite-local":
+        return False
+
+    if os.environ.get("VERCEL"):
+        import_backup_payload(client_backup)
+        return True
+
+    init_db()
+    conn = get_conn()
+    cur = conn.cursor()
+    srv_log_row = cur.execute(
+        "SELECT COUNT(*) AS cnt, COALESCE(MAX(created_ts), 0.0) AS max_ts FROM xp_log"
+    ).fetchone()
+    srv_cnt = int(srv_log_row["cnt"]) if srv_log_row else 0
+    srv_max_ts = float(srv_log_row["max_ts"]) if srv_log_row else 0.0
+    conn.close()
+
+    cli_logs = (
+        client_backup.get("xp_log")
+        if isinstance(client_backup.get("xp_log"), list)
+        else []
+    )
+    cli_cnt = len(cli_logs)
+    cli_max_ts = max((float(r.get("created_ts", 0.0)) for r in cli_logs), default=0.0)
+
+    if srv_cnt == 0 or cli_cnt > srv_cnt or cli_max_ts > srv_max_ts + 0.001:
+        import_backup_payload(client_backup)
+        return True
+    return False
+

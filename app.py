@@ -128,8 +128,6 @@ def _dispatch_request(method, path, raw_body=b"", auth_header=""):
     if method == "GET":
         if path == "/api/state":
             st = engine.get_full_state()
-            if st["profile"]["total_xp"] == 0 and st["profile"]["diagnostic_completed"] == 0:
-                st = engine.update_profile_settings(preset_mode="mid_sem1")
             return 200, "application/json; charset=utf-8", json.dumps(st, ensure_ascii=False).encode("utf-8")
 
         if path == "/api/backup":
@@ -174,7 +172,13 @@ def _dispatch_request(method, path, raw_body=b"", auth_header=""):
         except Exception as exc:
             return 400, "application/json; charset=utf-8", json.dumps({"error": f"JSON inválido: {exc}"}, ensure_ascii=False).encode("utf-8")
 
+        if path == "/api/state":
+            engine.ensure_hydrated_from_client(body.get("client_backup"))
+            st = engine.get_full_state()
+            return 200, "application/json; charset=utf-8", json.dumps(st, ensure_ascii=False).encode("utf-8")
+
         if path == "/api/complete":
+            engine.ensure_hydrated_from_client(body.get("client_backup"))
             topic_id = body.get("topic_id")
             correct_count = body.get("correct_count", 0)
             total_count = body.get("total_count", 1)
@@ -186,12 +190,15 @@ def _dispatch_request(method, path, raw_body=b"", auth_header=""):
                 return 400, "application/json; charset=utf-8", json.dumps({"error": str(exc)}, ensure_ascii=False).encode("utf-8")
 
         if path == "/api/diagnostic":
+            engine.ensure_hydrated_from_client(body.get("client_backup"))
             results = body.get("results", {})
             target_semester = body.get("target_semester", 1)
             res = engine.apply_diagnostic_results(results, target_semester)
             return 200, "application/json; charset=utf-8", json.dumps({"result": res, "state": engine.get_full_state()}, ensure_ascii=False).encode("utf-8")
 
         if path == "/api/profile":
+            if not body.get("preset_mode"):
+                engine.ensure_hydrated_from_client(body.get("client_backup"))
             state = engine.update_profile_settings(
                 current_semester=body.get("current_semester"),
                 daily_goal_xp=body.get("daily_goal_xp"),
@@ -279,12 +286,6 @@ application = app
 
 def run_server(port=8765):
     engine.init_db()
-    # Si la base de datos está recién inicializada sin actividad, cargamos el preset inicial "mid_sem1"
-    # para que el usuario vea inmediatamente la frontera de Semestre 1 + FIRe activo,
-    # pudiendo recalibrar con el Diagnóstico o reiniciar desde 0 con un clic.
-    st = engine.get_full_state()
-    if st["profile"]["total_xp"] == 0 and st["profile"]["diagnostic_completed"] == 0:
-        engine.update_profile_settings(preset_mode="mid_sem1")
 
     import socket
     lan_ip = "127.0.0.1"

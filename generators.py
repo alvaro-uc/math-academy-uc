@@ -35,106 +35,247 @@ def _make_mcq(prompt, correct_str, wrong_strs, hint, explanation):
     }
 
 
-def gen_inequality_abs():
-    a = random.choice([2, 3, 4, 5])
-    x_center = random.randint(-4, 5)
-    r = random.randint(2, 6)
-    b = a * x_center
-    rad = a * r
-    low = x_center - r
-    high = x_center + r
-    sign_b = f"- {b}" if b > 0 else (f"+ {-b}" if b < 0 else "")
-    prompt = f"Resuelva en $\\mathbb{{R}}$ la inecuación con valor absoluto $|{a}x {sign_b}| < {rad}$."
-    correct = f"$({low},\\; {high})$"
-    wrongs = [
-        f"$[{low},\\; {high}]$",
-        f"$(-\\infty, {low}) \\cup ({high}, \\infty)$",
-        f"$({-high},\\; {-low})$",
-    ]
-    hint = f"Escribe $-{rad} < {a}x {sign_b} < {rad}$ y despeja $x$."
-    explanation = (
-        f"Descomponemos como $-{rad} < {a}x {sign_b} < {rad}$. Sumando ${b}$ obtenemos "
-        f"${b - rad} < {a}x < {b + rad}$, y dividiendo por ${a} > 0$ resulta $x \\in ({low}, {high})$."
-    )
-    return _make_mcq(prompt, correct, wrongs, hint, explanation)
+def gen_inequality_abs(variant=None):
+    v = variant if variant is not None else random.randint(0, 2)
+    if v % 3 == 0:
+        a = random.choice([2, 3, 4, 5])
+        x_center = random.randint(-4, 5)
+        r = random.randint(2, 6)
+        b = a * x_center
+        rad = a * r
+        low = x_center - r
+        high = x_center + r
+        sign_b = f"- {b}" if b > 0 else (f"+ {-b}" if b < 0 else "")
+        prompt = f"Resuelva en $\\mathbb{{R}}$ la inecuación con valor absoluto $|{a}x {sign_b}| < {rad}$."
+        correct = f"$({low},\\; {high})$"
+        wrongs = [
+            f"$[{low},\\; {high}]$",
+            f"$(-\\infty, {low}) \\cup ({high}, \\infty)$",
+            f"$({-high},\\; {-low})$",
+        ]
+        hint = f"Escribe $-{rad} < {a}x {sign_b} < {rad}$ y despeja $x$."
+        explanation = (
+            f"Descomponemos como $-{rad} < {a}x {sign_b} < {rad}$. Sumando ${b}$ obtenemos "
+            f"${b - rad} < {a}x < {b + rad}$, y dividiendo por ${a} > 0$ resulta $x \\in ({low}, {high})$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    elif v % 3 == 1:
+        r1 = random.randint(-4, 0)
+        r2 = random.randint(2, 6)
+        s1 = f"+ {-r1}" if r1 < 0 else (f"- {r1}" if r1 > 0 else "")
+        prompt = f"¿Cuál es el conjunto solución en $\\mathbb{{R}}$ de la inecuación racional $\\frac{{x - {r2}}}{{x {s1}}} \\le 0$?"
+        correct = f"$({r1},\\; {r2}]$"
+        wrongs = [
+            f"$[{r1},\\; {r2}]$",
+            f"$(-\\infty, {r1}) \\cup [{r2}, \\infty)$",
+            f"$[{r1},\\; {r2})$",
+        ]
+        hint = f"Los puntos críticos son $x = {r1}$ (excluido por anular el denominador) y $x = {r2}$ (incluido)."
+        explanation = (
+            f"El cociente es negativo o cero entre las raíces ${r1}$ y ${r2}$. Como $x \\neq {r1}$ para no dividir por cero "
+            f"y $x = {r2}$ anula el numerador, la solución es $({r1}, {r2}]$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    else:
+        c = random.randint(3, 8)
+        k = random.randint(2, 6)
+        inf_val = c - k
+        sup_val = c
+        prompt = (
+            f"Sea el conjunto $S = \\left\\{{ {c} - \\frac{{{k}}}{{n}} : n \\in \\mathbb{{N}}_{{\\ge 1}} \\right\\}}$. "
+            f"Determine $\\inf(S)$ y $\\sup(S)$."
+        )
+        correct = f"$\\inf(S) = {inf_val},\\; \\sup(S) = {sup_val}$"
+        wrongs = [
+            f"$\\inf(S) = 0,\\; \\sup(S) = {sup_val}$",
+            f"$\\inf(S) = {inf_val},\\; \\sup(S) = {c + k}$",
+            f"$\\inf(S) = {-k},\\; \\sup(S) = {sup_val}$",
+        ]
+        hint = "Evalúa el primer término en $n = 1$ y toma el límite cuando $n \\to \\infty$."
+        explanation = (
+            f"La sucesión $x_n = {c} - {k}/n$ es estrictamente creciente. Su mínimo (e ínfimo) ocurre en $n=1$ con "
+            f"${c} - {k} = {inf_val}$, y su supremo es $\\lim_{{n\\to\\infty}} x_n = {sup_val}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
-def gen_function_composition():
-    a = random.randint(2, 5)
-    b = random.randint(1, 6)
-    c = random.randint(2, 4)
-    x0 = random.randint(1, 4)
-    fx0 = a * x0 + b
-    gfx0 = fx0 * fx0 - c
-    fgx0 = a * (x0 * x0 - c) + b
-    prompt = (
-        f"Sean $f(x) = {a}x + {b}$ y $g(x) = x^2 - {c}$. "
-        f"Calcule el valor de la función compuesta $(g \\circ f)({x0}) = g(f({x0}))$."
-    )
-    correct = f"${gfx0}$"
-    wrongs = [
-        f"${fgx0}$",
-        f"${fx0 * (x0 * x0 - c)}$",
-        f"${gfx0 + 2 * c}$",
-    ]
-    hint = f"Evalúa primero la función interna $u = f({x0})$ y luego calcula $g(u)$."
-    explanation = (
-        f"Primero calculamos $f({x0}) = {a}({x0}) + {b} = {fx0}$. "
-        f"Luego evaluamos $g({fx0}) = ({fx0})^2 - {c} = {fx0*fx0} - {c} = {gfx0}$."
-    )
-    return _make_mcq(prompt, correct, wrongs, hint, explanation)
+def gen_function_composition(variant=None):
+    v = variant if variant is not None else random.randint(0, 2)
+    if v % 3 == 0:
+        a = random.randint(2, 5)
+        b = random.randint(1, 6)
+        c = random.randint(2, 4)
+        x0 = random.randint(1, 4)
+        fx0 = a * x0 + b
+        gfx0 = fx0 * fx0 - c
+        fgx0 = a * (x0 * x0 - c) + b
+        prompt = (
+            f"Sean $f(x) = {a}x + {b}$ y $g(x) = x^2 - {c}$. "
+            f"Calcule el valor de la función compuesta $(g \\circ f)({x0}) = g(f({x0}))$."
+        )
+        correct = f"${gfx0}$"
+        wrongs = [
+            f"${fgx0}$",
+            f"${fx0 * (x0 * x0 - c)}$",
+            f"${gfx0 + 2 * c}$",
+        ]
+        hint = f"Evalúa primero la función interna $u = f({x0})$ y luego calcula $g(u)$."
+        explanation = (
+            f"Primero calculamos $f({x0}) = {a}({x0}) + {b} = {fx0}$. "
+            f"Luego evaluamos $g({fx0}) = ({fx0})^2 - {c} = {fx0*fx0} - {c} = {gfx0}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    elif v % 3 == 1:
+        a = random.randint(2, 5)
+        b = random.randint(1, 7)
+        y0 = a * random.randint(2, 6) + b
+        x_inv = (y0 - b) // a
+        prompt = (
+            f"Sea $f: \\mathbb{{R}} \\to \\mathbb{{R}}$ la función biyectiva $f(x) = {a}x + {b}$. "
+            f"Calcule el valor de la función inversa $f^{{-1}}({y0})$."
+        )
+        correct = f"${x_inv}$"
+        wrongs = [
+            f"${a * y0 + b}$",
+            f"${(y0 + b) // a if (y0 + b) % a == 0 else x_inv + 2}$",
+            f"$\\frac{{1}}{{{a * y0 + b}}}$",
+        ]
+        hint = f"Busca el único $x \\in \\mathbb{{R}}$ tal que $f(x) = {a}x + {b} = {y0}$."
+        explanation = (
+            f"Resolvemos ${a}x + {b} = {y0} \\implies {a}x = {y0 - b} \\implies x = {x_inv}$. "
+            f"Por tanto, $f^{{-1}}({y0}) = {x_inv}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    else:
+        h = random.randint(1, 5)
+        k = random.randint(1, 6)
+        b_coef = -2 * h
+        c_coef = h * h + k
+        prompt = (
+            f"Sea $f(x) = x^2 {b_coef}x + {c_coef}$ restringida al dominio $[{h}, +\\infty)$ donde es inyectiva. "
+            f"¿Cuál es su recorrido $\\text{{Rec}}(f)$?"
+        )
+        correct = f"$[{k},\\; +\\infty)$"
+        wrongs = [
+            f"$[{h},\\; +\\infty)$",
+            f"$[{c_coef},\\; +\\infty)$",
+            f"$(-\\infty,\\; {k}]$",
+        ]
+        hint = f"Completa el cuadrado: $f(x) = (x - {h})^2 + {k}$."
+        explanation = (
+            f"Completando el cuadrado obtenemos $f(x) = (x - {h})^2 + {k}$. "
+            f"Para $x \\ge {h}$, $(x - {h})^2 \\ge 0$, por lo que el recorrido es $[{k}, +\\infty)$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
-def gen_limit_rational():
-    r1 = random.randint(1, 5)
-    r2 = random.choice([i for i in range(-5, 6) if i != r1 and i != -r1])
-    # Lim_{x -> r1} (x^2 - (r1+r2)x + r1*r2) / (x - r1) = r1 - r2
-    b_coef = -(r1 + r2)
-    c_coef = r1 * r2
-    val = r1 - r2
-    b_str = f"+ {b_coef}x" if b_coef > 0 else (f"- {-b_coef}x" if b_coef < 0 else "")
-    c_str = f"+ {c_coef}" if c_coef > 0 else (f"- {-c_coef}" if c_coef < 0 else "")
-    prompt = f"Calcule el límite $\\lim_{{x \\to {r1}}} \\frac{{x^2 {b_str} {c_str}}}{{x - {r1}}}$."
-    correct = f"${val}$"
-    wrongs = [
-        f"${r1 + r2}$",
-        f"${-val}$",
-        "$0$",
-        "No existe",
-    ]
-    hint = f"Factoriza el numerador como $(x - {r1})(x - ({r2}))$ para cancelar la indeterminación $0/0$."
-    explanation = (
-        f"Factorizando el numerador: $\\frac{{(x - {r1})(x - ({r2}))}}{{x - {r1}}} = x - ({r2})$ para $x \\neq {r1}$. "
-        f"Evaluando en $x \\to {r1}$ obtenemos ${r1} - ({r2}) = {val}$."
-    )
-    return _make_mcq(prompt, correct, wrongs, hint, explanation)
+def gen_limit_rational(variant=None):
+    v = variant if variant is not None else random.randint(0, 2)
+    if v % 3 == 0:
+        r1 = random.randint(1, 5)
+        r2 = random.choice([i for i in range(-5, 6) if i != r1 and i != -r1])
+        b_coef = -(r1 + r2)
+        c_coef = r1 * r2
+        val = r1 - r2
+        b_str = f"+ {b_coef}x" if b_coef > 0 else (f"- {-b_coef}x" if b_coef < 0 else "")
+        c_str = f"+ {c_coef}" if c_coef > 0 else (f"- {-c_coef}" if c_coef < 0 else "")
+        prompt = f"Calcule el límite $\\lim_{{x \\to {r1}}} \\frac{{x^2 {b_str} {c_str}}}{{x - {r1}}}$."
+        correct = f"${val}$"
+        wrongs = [
+            f"${r1 + r2}$",
+            f"${-val}$",
+            "$0$",
+            "No existe",
+        ]
+        hint = f"Factoriza el numerador como $(x - {r1})(x - ({r2}))$ para cancelar la indeterminación $0/0$."
+        explanation = (
+            f"Factorizando el numerador: $\\frac{{(x - {r1})(x - ({r2}))}}{{x - {r1}}} = x - ({r2})$ para $x \\neq {r1}$. "
+            f"Evaluando en $x \\to {r1}$ obtenemos ${r1} - ({r2}) = {val}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    elif v % 3 == 1:
+        a = random.choice([2, 3, 4, 5])
+        k = random.choice([2, 4, 6])
+        ans_num = k
+        ans_den = 2 * a
+        g = math.gcd(ans_num, ans_den)
+        ans_str = f"$\\frac{{{ans_num // g}}}{{{ans_den // g}}}$" if (ans_den // g) != 1 else f"${ans_num // g}$"
+        prompt = f"Calcule sin usar L'Hôpital: $\\lim_{{x \\to 0}} \\frac{{\\sqrt{{{a*a} + {k}x}} - {a}}}{{x}}$."
+        correct = ans_str
+        wrongs = [
+            f"$\\frac{{{k}}}{{{a}}}$",
+            f"${k * a}$",
+            "$0$",
+        ]
+        hint = f"Multiplica numerador y denominador por el conjugado $\\sqrt{{{a*a} + {k}x}} + {a}$."
+        explanation = (
+            f"Racionalizando con el conjugado: $\\frac{{({a*a}+{k}x) - {a*a}}}{{x(\\sqrt{{{a*a}+{k}x}}+{a})}} = "
+            f"\\frac{{{k}}}{{\\sqrt{{{a*a}+{k}x}}+{a}}} \\to \\frac{{{k}}}{{2\\cdot {a}}} = {ans_str.strip('$')}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    else:
+        p = random.choice([3, 5, 6, 8, 9])
+        q = random.choice([2, 4, 7])
+        g = math.gcd(p, q)
+        ans_str = f"$\\frac{{{p // g}}}{{{q // g}}}$" if (q // g) != 1 else f"${p // g}$"
+        prompt = f"Usando límites trigonométricos notables, calcule $\\lim_{{x \\to 0}} \\frac{{\\sin({p}x)}}{{{q}x}}$."
+        correct = ans_str
+        wrongs = [
+            f"$\\frac{{{q // g}}}{{{p // g}}}$",
+            "$1$",
+            "$0$",
+        ]
+        hint = f"Reescribe como $\\frac{{{p}}}{{{q}}} \\cdot \\frac{{\\sin({p}x)}}{{{p}x}}$ y usa $\\lim_{{u\\to 0}} \\frac{{\\sin u}}{{u}} = 1$."
+        explanation = (
+            f"Multiplicando y dividiendo por ${p}$: $\\lim_{{x\\to 0}} \\frac{{{p}}}{{{q}}}\\frac{{\\sin({p}x)}}{{{p}x}} = "
+            f"\\frac{{{p}}}{{{q}}} \\cdot 1 = {ans_str.strip('$')}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
-def gen_continuity_param():
-    x0 = random.randint(1, 3)
-    c = random.randint(1, 5)
-    # f(x) = x^2 + c for x <= x0, ax + b for x > x0, derivable at x0
-    a_val = 2 * x0
-    b_val = (x0 * x0 + c) - a_val * x0  # c - x0^2
-    prompt = (
-        f"Determine $(a, b)$ para que $f(x) = \\begin{{cases}} x^2 + {c} & x \\le {x0} \\\\ ax + b & x > {x0} \\end{{cases}}$ "
-        f"sea continua y derivable en $x = {x0}$."
-    )
-    correct = f"$a = {a_val},\\; b = {b_val}$"
-    wrongs = [
-        f"$a = {a_val},\\; b = {x0 * x0 + c}$",
-        f"$a = {x0},\\; b = {c}$",
-        f"$a = {a_val},\\; b = {-b_val if b_val != 0 else 2}$",
-    ]
-    hint = f"Iguala primero las derivadas laterales en $x = {x0}$ para hallar $a = 2({x0})$, y luego iguala los límites laterales para hallar $b$."
-    explanation = (
-        f"Para derivabilidad en $x={x0}$ necesitamos $f'_-({x0}) = 2({x0}) = {a_val} = a$. "
-        f"Por continuidad en $x={x0}$: ${x0}^2 + {c} = {a_val}({x0}) + b \\implies {x0*x0+c} = {a_val*x0} + b \\implies b = {b_val}$."
-    )
-    return _make_mcq(prompt, correct, wrongs, hint, explanation)
+def gen_continuity_param(variant=None):
+    v = variant if variant is not None else random.randint(0, 1)
+    if v % 2 == 0:
+        x0 = random.randint(1, 3)
+        c = random.randint(1, 5)
+        a_val = 2 * x0
+        b_val = (x0 * x0 + c) - a_val * x0
+        prompt = (
+            f"Determine $(a, b)$ para que $f(x) = \\begin{{cases}} x^2 + {c} & x \\le {x0} \\\\ ax + b & x > {x0} \\end{{cases}}$ "
+            f"sea continua y derivable en $x = {x0}$."
+        )
+        correct = f"$a = {a_val},\\; b = {b_val}$"
+        wrongs = [
+            f"$a = {a_val},\\; b = {x0 * x0 + c}$",
+            f"$a = {x0},\\; b = {c}$",
+            f"$a = {a_val},\\; b = {-b_val if b_val != 0 else 2}$",
+        ]
+        hint = f"Iguala primero las derivadas laterales en $x = {x0}$ para hallar $a = 2({x0})$, y luego iguala los límites laterales para hallar $b$."
+        explanation = (
+            f"Para derivabilidad en $x={x0}$ necesitamos $f'_-({x0}) = 2({x0}) = {a_val} = a$. "
+            f"Por continuidad en $x={x0}$: ${x0}^2 + {c} = {a_val}({x0}) + b \\implies {x0*x0+c} = {a_val*x0} + b \\implies b = {b_val}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    else:
+        a = random.randint(2, 4)
+        x0 = random.randint(1, 3)
+        slope = 3 * (x0 ** 2) - a
+        prompt = (
+            f"Usando la definición de derivada, ¿cuál es la pendiente de la recta tangente a la curva "
+            f"$f(x) = x^3 - {a}x + 2$ en el punto $x_0 = {x0}$?"
+        )
+        correct = f"${slope}$"
+        wrongs = [
+            f"${3 * (x0 ** 2) + a}$",
+            f"${(x0 ** 3) - a * x0 + 2}$",
+            f"${2 * x0 - a}$",
+        ]
+        hint = f"Deriva $f'(x) = 3x^2 - {a}$ y evalúa en $x = {x0}$."
+        explanation = f"La derivada es $f'(x) = 3x^2 - {a}$. Evaluando en $x_0 = {x0}$ obtenemos $f'({x0}) = 3({x0})^2 - {a} = {slope}$."
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
-def gen_logic_truth():
+def gen_logic_truth(variant=None):
     variants = [
         (
             "¿Cuál es la negación formal de la proposición $(\\forall x \\in A,\\; P(x)) \\implies Q$?",
@@ -158,57 +299,133 @@ def gen_logic_truth():
             "Una implicancia solo falla cuando la hipótesis se cumple pero la conclusión no.",
             "Por definición de tabla de verdad, $p \\implies q \\equiv \\neg p \\lor q$ es Falsa única y exclusivamente cuando $p = V$ y $q = F$.",
         ),
+        (
+            "¿Cuál es la negación lógica de $\\exists x \\in \\mathbb{R},\\; (P(x) \\land \\neg Q(x))$?",
+            "$\\forall x \\in \\mathbb{R},\\; (P(x) \\implies Q(x))$",
+            [
+                "$\\forall x \\in \\mathbb{R},\\; (\\neg P(x) \\land Q(x))$",
+                "$\\exists x \\in \\mathbb{R},\\; (P(x) \\implies Q(x))$",
+                "$\\forall x \\in \\mathbb{R},\\; (Q(x) \\implies P(x))$",
+            ],
+            "Aplica De Morgan a $\\neg(P(x) \\land \\neg Q(x)) \\equiv \\neg P(x) \\lor Q(x) \\equiv P(x) \\implies Q(x)$.",
+            "Al negar el cuantificador existencial obtenemos $\\forall x$, y por De Morgan $\\neg(P \\land \\neg Q) \\equiv \\neg P \\lor Q \\equiv (P \\implies Q)$.",
+        ),
     ]
-    p, c, w, h, e = random.choice(variants)
+    idx = (variant if variant is not None else random.randint(0, len(variants) - 1)) % len(variants)
+    p, c, w, h, e = variants[idx]
     return _make_mcq(p, c, w, h, e)
 
 
-def gen_summation_telescopic():
-    n = random.choice([10, 15, 20, 30])
-    c = random.randint(1, 5)
-    # sum_{k=1}^n (2k + c) = n(n+1) + c*n
-    ans = n * (n + 1) + c * n
-    prompt = f"Calcule el valor exacto de la sumatoria $\\sum_{{k=1}}^{{{n}}} (2k + {c})$."
-    correct = f"${ans}$"
-    wrongs = [
-        f"${n * (n + 1) // 2 + c * n}$",
-        f"${n * (n + 1) + c}$",
-        f"${ans + n}$",
-    ]
-    hint = f"Separa por linealidad: $2\\sum_{{k=1}}^{{{n}}} k + \\sum_{{k=1}}^{{{n}}} {c} = 2\\frac{{{n}({n}+1)}}{{2}} + {c}\\cdot {n}$."
-    explanation = (
-        f"Por linealidad: $2 \\cdot \\frac{{{n}({n+1})}}{{2}} + {c}({n}) = {n*(n+1)} + {c*n} = {ans}$."
-    )
-    return _make_mcq(prompt, correct, wrongs, hint, explanation)
+def gen_summation_telescopic(variant=None):
+    v = variant if variant is not None else random.randint(0, 2)
+    if v % 3 == 0:
+        n = random.choice([10, 12, 15, 20, 25, 30])
+        c = random.randint(1, 6)
+        ans = n * (n + 1) + c * n
+        prompt = f"Calcule el valor exacto de la sumatoria $\\sum_{{k=1}}^{{{n}}} (2k + {c})$."
+        correct = f"${ans}$"
+        wrongs = [
+            f"${n * (n + 1) // 2 + c * n}$",
+            f"${n * (n + 1) + c}$",
+            f"${ans + n}$",
+        ]
+        hint = f"Separa por linealidad: $2\\sum_{{k=1}}^{{{n}}} k + \\sum_{{k=1}}^{{{n}}} {c} = 2\\frac{{{n}({n}+1)}}{{2}} + {c}\\cdot {n}$."
+        explanation = (
+            f"Por linealidad: $2 \\cdot \\frac{{{n}({n+1})}}{{2}} + {c}({n}) = {n*(n+1)} + {c*n} = {ans}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    elif v % 3 == 1:
+        n = random.choice([8, 10, 12, 15, 20, 24])
+        a = random.choice([2, 3, 4])
+        # sum_{k=1}^n 1/((k+a-1)(k+a)) = 1/a - 1/(n+a) = n / (a*(n+a))
+        num = n
+        den = a * (n + a)
+        g = math.gcd(num, den)
+        num_s, den_s = num // g, den // g
+        term_str = f"\\frac{{1}}{{(k+{a-1})(k+{a})}}"
+        prompt = f"Usando la propiedad telescópica, calcule el valor exacto de $\\sum_{{k=1}}^{{{n}}} {term_str}$."
+        correct = f"$\\frac{{{num_s}}}{{{den_s}}}$"
+        wrongs = [
+            f"$\\frac{{{1}}}{{{n + a}}}$",
+            f"$\\frac{{{n + 1}}}{{{den}}}$",
+            f"$\\frac{{{num_s}}}{{{den_s + 1}}}$",
+        ]
+        hint = f"Usa fracciones parciales: $\\frac{{1}}{{(k+{a-1})(k+{a})}} = \\frac{{1}}{{k+{a-1}}} - \\frac{{1}}{{k+{a}}}$."
+        explanation = (
+            f"Al descomponer en suma telescópica se cancelan los términos intermedios, quedando "
+            f"$\\frac{{1}}{{{a}}} - \\frac{{1}}{{{n}+{a}}} = \\frac{{{n}}}{{{a}({n+a})}} = \\frac{{{num_s}}}{{{den_s}}}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    else:
+        n = random.choice([5, 6, 7, 8])
+        k = random.choice([2, 3])
+        a = random.choice([2, 3])
+        coef = math.comb(n, k) * (a ** k)
+        prompt = (
+            f"Por el Teorema del Binomio de Newton, ¿cuál es el coeficiente de $x^{{{k}}}$ en el desarrollo de $(1 + {a}x)^{{{n}}}$?"
+        )
+        correct = f"${coef}$"
+        wrongs = [
+            f"${math.comb(n, k) * a}$",
+            f"${math.comb(n, k)}$",
+            f"${(a ** k) * n}$",
+        ]
+        hint = f"El término con $x^{{{k}}}$ en $(1 + {a}x)^{{{n}}}$ es $\\binom{{{n}}}{{{k}}} ({a}x)^{{{k}}} = \\binom{{{n}}}{{{k}}} {a}^{{{k}}} x^{{{k}}}$."
+        explanation = (
+            f"Por el Teorema del Binomio, el coeficiente de $x^{{{k}}}$ es "
+            f"$\\binom{{{n}}}{{{k}}} \\cdot {a}^{{{k}}} = {math.comb(n, k)} \\cdot {a**k} = {coef}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
-def gen_vectors_dot_proj():
-    u1, u2, u3 = random.randint(1, 4), random.randint(-3, 3), random.randint(1, 4)
-    v1, v2 = random.randint(1, 3), random.randint(1, 3)
-    # queremos u . v = dot_val
-    v3 = random.randint(-2, 3)
-    dot = u1 * v1 + u2 * v2 + u3 * v3
-    prompt = (
-        f"Dados los vectores $u = ({u1}, {u2}, {u3})$ y $v = ({v1}, {v2}, {v3})$ en $\\mathbb{{R}}^3$, "
-        f"calcule el producto punto $u \\cdot v$."
-    )
-    correct = f"${dot}$"
-    wrongs = [
-        f"${dot + 2 * u1}$",
-        f"${abs(dot) + 3}$",
-        f"${u1 + u2 + u3 + v1 + v2 + v3}$",
-    ]
-    hint = "Multiplica componente a componente y suma: $u_1 v_1 + u_2 v_2 + u_3 v_3$."
-    explanation = f"$u \\cdot v = ({u1})({v1}) + ({u2})({v2}) + ({u3})({v3}) = {u1*v1} + ({u2*v2}) + ({u3*v3}) = {dot}$."
-    return _make_mcq(prompt, correct, wrongs, hint, explanation)
+def gen_vectors_dot_proj(variant=None):
+    v = variant if variant is not None else random.randint(0, 1)
+    if v % 2 == 0:
+        u1, u2, u3 = random.randint(1, 4), random.randint(-3, 3), random.randint(1, 4)
+        v1, v2 = random.randint(1, 3), random.randint(1, 3)
+        v3 = random.randint(-2, 3)
+        dot = u1 * v1 + u2 * v2 + u3 * v3
+        prompt = (
+            f"Dados los vectores $u = ({u1}, {u2}, {u3})$ y $v = ({v1}, {v2}, {v3})$ en $\\mathbb{{R}}^3$, "
+            f"calcule el producto punto $u \\cdot v$."
+        )
+        correct = f"${dot}$"
+        wrongs = [
+            f"${dot + 2 * u1}$",
+            f"${abs(dot) + 3}$",
+            f"${u1 + u2 + u3 + v1 + v2 + v3}$",
+        ]
+        hint = "Multiplica componente a componente y suma: $u_1 v_1 + u_2 v_2 + u_3 v_3$."
+        explanation = f"$u \\cdot v = ({u1})({v1}) + ({u2})({v2}) + ({u3})({v3}) = {u1*v1} + ({u2*v2}) + ({u3*v3}) = {dot}$."
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    else:
+        u1, u2 = random.choice([2, 3, 4]), random.choice([1, 2, 3])
+        v2 = random.choice([2, 4])
+        # u = (u1, u2, -1), v = (v1, v2, k) ortogonales => u1*1 + u2*v2 - k = 0 => k = u1 + u2*v2
+        k_val = u1 + u2 * v2
+        prompt = (
+            f"¿Para qué valor de $\\alpha \\in \\mathbb{{R}}$ los vectores $u = ({u1}, {u2}, -1)$ y "
+            f"$v = (1, {v2}, \\alpha)$ en $\\mathbb{{R}}^3$ son ortogonales?"
+        )
+        correct = f"$\\alpha = {k_val}$"
+        wrongs = [
+            f"$\\alpha = {-k_val}$",
+            f"$\\alpha = {u1 * v2 - u2}$",
+            "$\\alpha = 0$",
+        ]
+        hint = "Dos vectores son ortogonales si y solo si su producto punto $u \\cdot v = 0$."
+        explanation = (
+            f"Imponemos $u \\cdot v = ({u1})(1) + ({u2})({v2}) + (-1)(\\alpha) = {k_val} - \\alpha = 0 \\implies \\alpha = {k_val}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
-def gen_complex_modulus():
-    a, b = random.choice([(3, 4), (5, 12), (1, 1), (2, 2)])
-    n = random.choice([2, 3, 4])
-    mod_sq = a * a + b * b
-    # si a=3,b=4 -> |z|=5, |z^n| = 5^n
-    if a in (3, 5):
+def gen_complex_modulus(variant=None):
+    v = variant if variant is not None else random.randint(0, 1)
+    if v % 2 == 0:
+        a, b = random.choice([(3, 4), (5, 12), (6, 8)])
+        n = random.choice([2, 3, 4])
+        mod_sq = a * a + b * b
         r = int(math.isqrt(mod_sq))
         ans = r ** n
         prompt = f"Sea $z = {a} - {b}i \\in \\mathbb{{C}}$. ¿Cuál es el módulo $|z^{n}|$?"
@@ -218,38 +435,74 @@ def gen_complex_modulus():
         explanation = f"Como $|z| = \\sqrt{{{a}^2 + (-{b})^2}} = \\sqrt{{{mod_sq}}} = {r}$, entonces $|z^{n}| = |z|^{n} = {r}^{n} = {ans}$."
         return _make_mcq(prompt, correct, wrongs, hint, explanation)
     else:
-        ans = mod_sq ** (n // 2) if n % 2 == 0 else f"{mod_sq}\\sqrt{{{mod_sq}}}"
-        prompt = f"Sea $z = {a} + {b}i$. ¿Cuánto vale $|z|^2 = z \\bar{{z}}$?"
-        correct = f"${mod_sq}$"
-        wrongs = [f"${a + b}$", f"$0$", f"${a*a - b*b}$"]
-        hint = "Recuerda que $(a + bi)(a - bi) = a^2 + b^2$."
-        explanation = f"$z\\bar{{z}} = {a}^2 + {b}^2 = {mod_sq}$."
+        a = random.randint(1, 5)
+        b = random.randint(1, 5)
+        re_sum = 2 * a
+        mod_sq = a * a + b * b
+        prompt = (
+            f"Si $z_1 = {a} + {b}i$ es una raíz compleja de un polinomio mónico $P(x) = x^2 + px + q$ con coeficientes reales, "
+            f"¿cuáles son los valores de $p$ y $q$?"
+        )
+        correct = f"$p = {-re_sum},\\; q = {mod_sq}$"
+        wrongs = [
+            f"$p = {re_sum},\\; q = {mod_sq}$",
+            f"$p = {-re_sum},\\; q = {a*a - b*b}$",
+            f"$p = {-a},\\; q = {b*b}$",
+        ]
+        hint = f"Por coeficientes reales, la otra raíz es el conjugado $z_2 = {a} - {b}i$, y $P(x) = (x - z_1)(x - \\bar{{z}}_1) = x^2 - 2\\text{{Re}}(z_1)x + |z_1|^2$."
+        explanation = (
+            f"Las raíces conjugadas suman $z_1 + \\bar{{z}}_1 = {re_sum} = -p \\implies p = {-re_sum}$, "
+            f"y su producto es $z_1\\bar{{z}}_1 = {a}^2 + {b}^2 = {mod_sq} = q$."
+        )
         return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
-def gen_descriptive_stats():
-    mean_x = random.randint(5, 20)
-    sd_x = random.randint(2, 6)
-    a = random.choice([-3, -2, 2, 3, 4])
-    b = random.randint(1, 10)
-    mean_y = a * mean_x + b
-    var_y = (a * a) * (sd_x * sd_x)
-    prompt = (
-        f"Una variable $X$ tiene media muestral $\\bar{{x}} = {mean_x}$ y desviación estándar $s_x = {sd_x}$. "
-        f"Si definimos $Y = {a}X + {b}$, ¿cuáles son la media $\\bar{{y}}$ y la varianza $s_y^2$?"
-    )
-    correct = f"$\\bar{{y}} = {mean_y},\\; s_y^2 = {var_y}$"
-    wrongs = [
-        f"$\\bar{{y}} = {mean_y},\\; s_y^2 = {abs(a) * sd_x * sd_x + b}$",
-        f"$\\bar{{y}} = {a * mean_x},\\; s_y^2 = {a * sd_x * sd_x}$",
-        f"$\\bar{{y}} = {mean_y},\\; s_y^2 = {abs(a) * sd_x}$",
-    ]
-    hint = "La media es lineal ($\\bar{y} = a\\bar{x} + b$), pero la varianza cumple $s_y^2 = a^2 s_x^2$ (la constante $+b$ no afecta la dispersión)."
-    explanation = (
-        f"$\\bar{{y}} = {a}({mean_x}) + {b} = {mean_y}$. "
-        f"Como $s_x^2 = {sd_x}^2 = {sd_x*sd_x}$, la nueva varianza es $s_y^2 = ({a})^2 s_x^2 = {a*a} \\cdot {sd_x*sd_x} = {var_y}$."
-    )
-    return _make_mcq(prompt, correct, wrongs, hint, explanation)
+def gen_descriptive_stats(variant=None):
+    v = variant if variant is not None else random.randint(0, 1)
+    if v % 2 == 0:
+        mean_x = random.randint(5, 20)
+        sd_x = random.randint(2, 6)
+        a = random.choice([-3, -2, 2, 3, 4])
+        b = random.randint(1, 10)
+        mean_y = a * mean_x + b
+        var_y = (a * a) * (sd_x * sd_x)
+        prompt = (
+            f"Una variable $X$ tiene media muestral $\\bar{{x}} = {mean_x}$ y desviación estándar $s_x = {sd_x}$. "
+            f"Si definimos $Y = {a}X + {b}$, ¿cuáles son la media $\\bar{{y}}$ y la varianza $s_y^2$?"
+        )
+        correct = f"$\\bar{{y}} = {mean_y},\\; s_y^2 = {var_y}$"
+        wrongs = [
+            f"$\\bar{{y}} = {mean_y},\\; s_y^2 = {abs(a) * sd_x * sd_x + b}$",
+            f"$\\bar{{y}} = {a * mean_x},\\; s_y^2 = {a * sd_x * sd_x}$",
+            f"$\\bar{{y}} = {mean_y},\\; s_y^2 = {abs(a) * sd_x}$",
+        ]
+        hint = "La media es lineal ($\\bar{y} = a\\bar{x} + b$), pero la varianza cumple $s_y^2 = a^2 s_x^2$ (la constante $+b$ no afecta la dispersión)."
+        explanation = (
+            f"$\\bar{{y}} = {a}({mean_x}) + {b} = {mean_y}$. "
+            f"Como $s_x^2 = {sd_x}^2 = {sd_x*sd_x}$, la nueva varianza es $s_y^2 = ({a})^2 s_x^2 = {a*a} \\cdot {sd_x*sd_x} = {var_y}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+    else:
+        n_total = random.choice([7, 8, 9, 10])
+        k_pick = random.choice([2, 3])
+        ans = math.comb(n_total, k_pick)
+        perm = math.perm(n_total, k_pick)
+        prompt = (
+            f"En un proyecto de Ciencia de Datos con ${n_total}$ variables candidatas, "
+            f"¿de cuántas formas distintas se puede elegir un subconjunto de ${k_pick}$ variables (sin importar el orden)?"
+        )
+        correct = f"${ans}$"
+        wrongs = [
+            f"${perm}$",
+            f"${n_total * k_pick}$",
+            f"${n_total ** k_pick}$",
+        ]
+        hint = f"Como no importa el orden de selección, calcula el coeficiente binomial $\\binom{{{n_total}}}{{{k_pick}}}$."
+        explanation = (
+            f"El número de subconjuntos de tamaño ${k_pick}$ es $\\binom{{{n_total}}}{{{k_pick}}} = "
+            f"\\frac{{{n_total}!}}{{{k_pick}!({n_total-k_pick})!}} = {ans}$."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation)
 
 
 def gen_derivative_chain():
@@ -582,13 +835,23 @@ def generate_parametric_questions(generator_type, count=2):
     fn = GENERATORS.get(generator_type, gen_inequality_abs)
     out = []
     seen_prompts = set()
-    for _ in range(count * 4):
-        q = fn()
+    start_v = random.randint(0, 5)
+    for idx in range(count * 4):
+        v = start_v + idx
+        try:
+            q = fn(variant=v)
+        except TypeError:
+            q = fn()
         if q["prompt"] not in seen_prompts:
             seen_prompts.add(q["prompt"])
             out.append(q)
         if len(out) >= count:
             break
     while len(out) < count:
-        out.append(fn())
+        try:
+            out.append(fn(variant=random.randint(0, 2)))
+        except TypeError:
+            out.append(fn())
     return out
+
+
