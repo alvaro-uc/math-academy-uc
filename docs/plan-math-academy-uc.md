@@ -29,7 +29,7 @@ El Markdown adjunto aportó un índice de imágenes de la página. Las observaci
 - **Layering y FIRe.** Separar las aristas de prerrequisito de las de habilidades efectivamente ejercitadas. Simplificar una fracción algebraica en un límite puede dar evidencia sobre factorización cuando el ejercicio exige ese paso. La descripción pública de Skycak incluye ecuaciones de memoria y repetición, dosis parciales y crédito a componentes. Usarla para comparar casos concretos con `encompasses` y el motor actual. Los pesos por ejercicio, las reglas de inferencia y los parámetros que usemos para la UC se validarán localmente. [Descripción de FIRe](https://www.justinmath.com/individualized-spaced-repetition-in-hierarchical-knowledge-structures/), [The Math Academy Way](https://www.justinmath.com/books/).
 - **Evaluación propia.** Registrar por habilidad la exactitud de primer intento sin pista en variantes inéditas a 7 y 14 días, los minutos efectivos y el volumen de repasos pendientes. Añadir un problema de transferencia parecido a una interrogación. La portada hace una afirmación de aceleración y la página de testimonios reúne experiencias. La medida útil aquí es cuánto puedes resolver y retener en tu propio temario. [Portada](https://www.mathacademy.com/), [testimonios](https://www.mathacademy.com/testimonials).
 
-## Punto de partida del repositorio
+## Punto de partida antes de los módulos 1 a 6
 
 | Área | Estado observado |
 | --- | --- |
@@ -39,7 +39,7 @@ El Markdown adjunto aportó un índice de imágenes de la página. Las observaci
 | Repaso y desbloqueo | `engine.py` usa una curva exponencial de retención y una estabilidad en días. El 0,78 de la curva, el 0,70 para prerrequisitos, el 0,75 de maestría y el 65 % de aprobación son valores actuales del prototipo. Un repaso fallido en un tema previamente dominado reduce la estabilidad y conserva un piso de maestría. La cola recomienda hasta cuatro tareas y puede omitir un repaso por cobertura esperada de una tarea superior. |
 | Regresión comprobada | En una SQLite temporal, tres intentos de `ic_limites` con `0/4` hicieron que la maestría pasara por `0,35 → 0,60 → 0,85`. El tercero devolvió `passed=True` y el tema siguiente, `ic_continuidad_derivada`, pasó de bloqueado a disponible. |
 
-## Módulos y criterios de cierre
+## Módulos 1 a 6 y criterios de cierre
 
 Un primer piloto de **MAT1107** aprovecha cuatro temas existentes: desigualdades, funciones, límites y continuidad/derivada introductoria. Es una propuesta inicial. Si una interrogación próxima exige otro bloque, sustituir el piloto por ese bloque antes de crear contenido.
 
@@ -59,7 +59,7 @@ Un primer piloto de **MAT1107** aprovecha cuatro temas existentes: desigualdades
 3. Usa razonamiento medio para el trabajo habitual y prueba alto en una pregunta concreta si el resultado depende de analizar una fórmula o un caso ambiguo. Mantén velocidad estándar para la primera medición. Si el presupuesto se estrecha, cierra la prueba activa y registra el siguiente paso antes de abrir otro frente. [Modelos y esfuerzo](https://learn.chatgpt.com/docs/models), [uso según velocidad](https://learn.chatgpt.com/docs/pricing).
 4. Al cerrar, anota el resultado y cómo reproducirlo. Una sesión nueva puede retomar desde ese registro con el mismo modelo o con otro. Si comparas proveedores, dales la misma regresión y usa el resultado de la prueba, el tiempo y el consumo observado como criterio.
 
-## Estado y prompt de reanudación
+## Estado de los módulos 1 a 6
 
 **Estado al 11 de noviembre de 2026.** Módulo 1 implementado y verificado. `passed` usa la exactitud del intento con el umbral de 65 % antes de redondear. Solo una aprobación aporta evidencia de maestría directa o crédito implícito FIRe. Un fallo en un tópico que ya alcanzó el 75 % de maestría conserva su maestría histórica y fija el próximo repaso a partir del 55 % de la estabilidad previa, con un mínimo de un día. Si el tópico aún no está aprendido, el fallo registra las respuestas y la actividad sin programar un repaso. Los XP siguen la regla de actividad existente. El resumen de la sesión muestra por separado el resultado, la maestría y, cuando corresponde, el intervalo de repaso.
 
@@ -67,12 +67,108 @@ Un primer piloto de **MAT1107** aprovecha cuatro temas existentes: desigualdades
 
 El módulo opera sobre el esquema y los respaldos existentes. Las estimaciones ya guardadas se conservan, incluidas las que pudieron quedar infladas por la regla anterior.
 
-**Siguiente entrega.** Abrir el módulo 2 cuando se solicite. El piloto y el presupuesto orientativo son propuestas, y la malla 2026 es una referencia hasta conocer el año de ingreso y el programa de la asignatura.
+**Estado del módulo 2 al 11 de noviembre de 2026.** Implementado y verificado. El catálogo UC de MAT1107 incluye inecuaciones, valor absoluto, polinomios, sucesiones y funciones reales. Los límites de funciones, la continuidad y la derivada aparecen en MAT1610. Se mantuvieron los cuatro temas del piloto y se rotularon los dos últimos como puente a Cálculo I. Se corrigió el código de Introducción al Cálculo a MAT1107 según la malla 2026. El piloto practica una selección del programa. La inducción, las progresiones, las recurrencias y la cobertura completa de gráficas y funciones elementales quedan fuera de esta entrega. [Programa de MAT1107](https://catalogo.uc.cl/index.php?option=com_catalogo&sigla=MAT1107&tmpl=component&view=programa), [programa de MAT1610](https://catalogo.uc.cl/index.php?option=com_catalogo&sigla=MAT1610&tmpl=component&view=programa), [malla UC 2026](https://ingenieriacienciadedatos.uc.cl/malla-curricular-licd-2026.pdf).
+
+| Lección | Familias de ejercicios |
+| --- | --- |
+| Desigualdades, valor absoluto y sucesiones | Inecuación con valor absoluto, tabla de signos racional, ínfimo y supremo, umbral de convergencia de una sucesión para una tolerancia dada. |
+| Funciones reales | Evaluación de una composición, preimagen mediante la inversa, recorrido de una cuadrática restringida. El problema fijo de transferencia del sensor combina factorización, signos, dominio del logaritmo y restricción de tiempo. |
+| Límites de funciones | Factorización, racionalización y límite trigonométrico en radianes. |
+| Continuidad y derivada | Empalme continuo y derivable de dos tramos, pendiente de una cúbica mediante el cociente incremental. Bolzano se practica con una pregunta fija. |
+
+Cada lección genera dos preguntas de familias distintas y conserva sus preguntas fijas. Funciones incluye una pregunta fija adicional para el problema de transferencia. La retroalimentación muestra la solución exacta, el desarrollo y un error típico. Se conservaron los identificadores, las aristas del grafo y la regla de maestría del módulo 1. La API de lecciones devuelve `exercise_seed`. Para reproducir la lección completa, incluidas las alternativas y su orden, usa `get_topic_lesson_payload` con el mismo identificador de tema y la semilla en la misma versión del código y de Python.
+
+```sh
+python -c "from engine import get_topic_lesson_payload; print(get_topic_lesson_payload('ic_funciones', seed=1107)['questions'])"
+python -m unittest discover -s tests -v
+node --check static/app.js
+```
+
+**Evidencia del módulo 2.** Pasaron siete pruebas. Se contrastaron respuestas y restricciones de dominio para 1.536 instancias de las 12 familias con las semillas 0 a 127, más casos exactos conocidos y los extremos del problema del sensor. La ruta WSGI autenticada sirvió las cuatro lecciones, que se reprodujeron a partir de su semilla sin modificar el respaldo de SQLite temporal. Pasaron las tres regresiones de maestría. El KaTeX local renderizó los enunciados, alternativas, pistas y soluciones del lote sin errores. El uso de cuota de esta entrega no se midió.
+
+**Estado del módulo 3 al 11 de noviembre de 2026.** Implementado y verificado con SQLite temporal, reloj fijo y variantes reproducibles. La cola muestra el motivo de cada recomendación. Los repasos y las comprobaciones comienzan con un problema sin teoría ni pistas. Cada pregunta acepta un primer intento y muestra su explicación después de responder. En el piloto, cada una de estas sesiones usa tres enunciados paramétricos distintos y se aprueba con al menos dos aciertos. La recuperación guiada abre la teoría y el ejemplo resuelto antes de la práctica.
+
+- La curva de referencia sigue siendo `R(t) = 0,78^(Δt/S)`. Para un tema aprendido, la fecha guardada determina el vencimiento cuando existe. Un repaso aprobado aplica el factor de crecimiento del módulo 1 desde la hora del intento, incluso cuando el repaso llegó tarde.
+- El primer repaso fallido de un tema aprendido conserva su maestría histórica y programa un repaso directo al 55 % de la estabilidad anterior, con redondeo a una décima y mínimo de un día. Dos repasos fallidos consecutivos programan recuperación guiada a un día. Un fallo en esa recuperación vuelve a programarla a un día. Una aprobación directa del tema cierra la racha.
+- Tras el segundo fallo se comprueban los prerrequisitos inmediatos que tienen maestría inferior al 70 % o un repaso vencido. Si la comprobación falla, la cola ofrece recuperación guiada del prerrequisito. El tema original vuelve a la cola cuando ya venció su intervalo y se resolvieron las comprobaciones pendientes.
+- El crédito implícito FIRe queda suspendido para los temas con seguimiento directo pendiente. Una comprobación o recuperación aprobada aporta evidencia directa al tema practicado. El historial de actividad ya guarda el tipo de tarea y su exactitud, lo que permite reconstruir la cola desde respaldos existentes con el mismo esquema. La maestría, la retención estimada, la exactitud, el avance de la sesión y los XP conservan sus mediciones propias.
+
+Los dos fallos, el día de espera y los criterios para sospechar de un prerrequisito son reglas del piloto. La práctica de recuperación y el espaciado tienen respaldo experimental en tareas verbales. La validación de estos parámetros para el temario UC requiere observar intentos diferidos durante el estudio. [Roediger y Karpicke, 2006](https://pubmed.ncbi.nlm.nih.gov/16507066/), [Cepeda et al., 2008](https://journals.sagepub.com/doi/10.1111/j.1467-9280.2008.02209.x).
+
+| Simulación de límites | Resultado verificado |
+| --- | --- |
+| Acierto justo al vencimiento | Con estabilidad inicial de 8 días, la retención estimada era 0,78. El repaso perfecto programó el siguiente a 21,6 días desde el intento. |
+| Acierto 8 días después del vencimiento | La retención estimada bajó a 0,608. El repaso perfecto volvió a programar 21,6 días desde la nueva fecha. |
+| Fallo aislado | Maestría de 0,92 preservada y repaso directo a 4,4 días. Aprobar continuidad no aplazó ese repaso. |
+| Fallos repetidos | Al segundo fallo se programó recuperación a un día. Se comprobó el flujo con funciones vigente, vencida y bajo 70 %. Aprobar la comprobación dejó habilitada la recuperación de límites al vencer su intervalo. Fallar la comprobación puso primero la recuperación guiada de funciones. |
+
+**Evidencia del módulo 3.** Pasaron 11 pruebas con `python -m unittest discover -s tests -v`, incluidas las rutas WSGI autenticadas, la restauración de la cola desde el respaldo y una regresión para evitar enunciados repetidos en una sesión. Un barrido de las semillas 0 a 999 para los cuatro temas del piloto verificó tres enunciados distintos en cada una de las 4.000 sesiones de repaso. Pasó `node --check static/app.js`. Una prueba de JavaScript con DOM simulado verificó el motivo de la tarjeta, el inicio sin pistas de los intentos directos, el ejemplo de la recuperación y un solo envío ante dos llamadas simultáneas desde la sesión. El uso de cuota no se midió.
+
+**Estado del módulo 4 al 11 de noviembre de 2026.** Implementado y verificado con SQLite temporal, reloj fijo y semilla 1107. El diagnóstico del piloto comienza en Funciones porque conecta Desigualdades con Límites. Un acierto lleva al sucesor disponible y un error u omisión lleva a un prerrequisito pendiente. Al llegar a un extremo, el sistema comprueba prerrequisitos sobre los que quedó una inferencia favorable. Se fijó un máximo de seis preguntas, la longitud del test anterior, con cierre anticipado cuando se resuelven las comprobaciones pendientes. La selección y la corrección funcionan localmente. La estrategia de usar el grafo para elegir preguntas y comprobar lagunas toma como referencia el diagnóstico público de Math Academy. [How Our AI Works](https://www.mathacademy.com/how-our-ai-works#the-diagnostic-algorithm).
+
+- El informe separa aciertos, errores y omisiones por tema. Un acierto genera una inferencia favorable hacia sus prerrequisitos. Un error señala una posible laguna en los sucesores. Si una respuesta directa contradice una inferencia favorable, se pide otra pregunta de una familia distinta. Una omisión deja el tema sin evidencia directa. La evidencia mixta queda registrada como tal.
+- Al finalizar, al menos un acierto directo y cero errores en ese tema permiten inicializar su maestría al 75 % si estaba bajo ese umbral. El primer repaso se fija a dos días de la observación si el tema aún carecía de fecha. Las inferencias, omisiones y resultados mixtos no acreditan maestría. Los XP, el semestre y el historial previo se conservan. El 75 % y los dos días son parámetros iniciales del piloto pendientes de validar con repasos diferidos.
+- Cada respuesta confirmada guarda la sesión y la pregunta siguiente en SQLite. Volver a abrir el diagnóstico muestra la misma variante y el mismo orden de alternativas. Los respaldos incluyen la sesión y permiten reconstruirla con la misma versión del generador. Un envío repetido o un respaldo automático anterior no hace retroceder la sesión. Una base nueva parte con 0 XP, maestrías en cero y diagnóstico pendiente. Los perfiles de demostración se activan desde el panel y se identifican como tales. Se conservó el progreso de las bases y respaldos anteriores, que carecen de un marcador de demostración.
+
+| Caso del módulo 4 | Resultado verificado |
+| --- | --- |
+| Dos respuestas incorrectas | Funciones → Desigualdades. Límites y Continuidad quedaron con posible laguna inferida y ninguna maestría aumentó. |
+| Cuatro aciertos | Funciones → Límites → Continuidad → Desigualdades. Se confirmó la inferencia en Desigualdades y cada tema quedó con maestría inicial de 0,75 y un repaso a dos días. |
+| Inferencia en conflicto | Un error en Desigualdades tras acertar las preguntas anteriores provocó otra pregunta de familia distinta. El acierto en la segunda dejó evidencia mixta y Desigualdades sin acreditación ni fecha de repaso. |
+| Interrupción y reintento | El mismo enunciado y las mismas alternativas reaparecieron tres días después, incluso al importar el respaldo a otra SQLite. Dos envíos concurrentes de la respuesta final registraron una sola transición. |
+
+**Evidencia del módulo 4.** Pasaron 15 pruebas con `python -m unittest discover -s tests -v`, incluidas cuatro pruebas del diagnóstico por la API WSGI autenticada. Pasó `node --check static/app.js`. Una prueba con DOM simulado verificó el inicio, la reapertura de la misma pregunta, el bloqueo de envíos simultáneos, las etiquetas de evidencia y el indicador de demostración. La persistencia se verificó en SQLite temporal. No se midió el uso de cuota.
+
+**Estado del módulo 5 al 11 de noviembre de 2026.** Implementado y verificado. El panel muestra la maestría media y los temas dominados por ramo, el avance por respuestas confirmadas de las lecciones en curso, los prerrequisitos cumplidos y pendientes según el umbral de 70 %, los XP acumulados y de hoy, y los XP y sesiones de los últimos siete días.
+
+- La lección guarda en SQLite la variante exacta, el orden de las alternativas, el paso y las respuestas confirmadas. «Retomar» vuelve al mismo paso y recupera la corrección si ya se había respondido. La última práctica queda disponible para consultar su resultado. El cierre escribe la sesión, la evidencia y los XP en una sola transacción. Los respaldos nuevos incluyen las sesiones y los respaldos anteriores se siguen importando.
+- El quiz del piloto se habilita al reunir dos temas vistos. Cuenta como visto un tema con una respuesta confirmada en práctica o diagnóstico, o con maestría guardada de al menos 75 %. El quiz baraja los temas y elige una variante paramétrica inédita por tema disponible, entre dos y cuatro. La selección excluye los enunciados registrados por el flujo de estudio y el diagnóstico. Los registros de lecciones anteriores al módulo 5 guardaban el resultado agregado del intento, por lo que no permiten reconstruir sus enunciados. Las semillas guardadas permiten retomar el quiz con la misma versión del generador. Las soluciones aparecen al terminar y cada acierto aporta un XP de actividad. La evaluación mixta con repaso posterior sigue el patrón público de Math Academy. [How It Works](https://www.mathacademy.com/how-it-works#quizzes).
+- Cada error en el quiz añade un repaso directo inmediato en la cola, incluso si el tema todavía tiene maestría cero. La observación es un error en una variante individual, por lo que el quiz conserva la maestría, la estabilidad y la fecha del repaso espaciado. El tema queda protegido contra crédito implícito hasta resolver la tarea. El repaso usa tres variantes sin pistas. Aprobar al menos dos cierra el pendiente y aplica las reglas de evidencia directa y espaciado del motor. Un fallo deja el pendiente en la cola.
+
+**Evidencia del módulo 5.** Pasaron 17 pruebas con `python -m unittest discover -s tests -v`. Las dos pruebas nuevas usan la API WSGI autenticada, SQLite temporal, reloj controlado y semilla 1107. Verifican reanudación y respaldo de lección y quiz, protección frente a copias antiguas, cierre simultáneo con un solo registro de XP, reversión completa ante un fallo de escritura, ventana móvil de siete días, quiz de temas vistos con variantes distintas entre intentos y creación y cierre de repasos por error. Pasó `node --check static/app.js`. Chrome sin interfaz, con respuestas capturadas de la API local de prueba, verificó la interfaz del panel, KaTeX, la reapertura de ambos intentos y el resultado del quiz en vistas de escritorio y estrecha. La persistencia y la concurrencia se verificaron en SQLite local. El uso de cuota no se midió.
+
+**Estado del módulo 6 al 11 de noviembre de 2026.** Implementado y verificado en el piloto. El repaso de Continuidad y Derivada incorpora una familia reproducible que pide hallar el dominio de una expresión radical con una discontinuidad removible y calcular el valor que permite extenderla. La solución exige conservar la restricción del denominador y analizar el signo del radicando. Los ejercicios del diagnóstico y del quiz conservan su selección por semilla.
+
+- Solo un acierto en una pregunta auditada de un repaso ordinario aprobado aporta crédito FIRe. Los repasos ordinarios usan el primer intento y se presentan sin pistas. Los resultados agregados de `/api/complete` conservan la evidencia directa y los XP. Los temas aún sin maestría del 75 % y los que requieren seguimiento directo quedan excluidos del crédito implícito.
+- Los pesos y las operaciones se declaran por familia en `fire.py`. En la extensión radical, la evidencia hacia Desigualdades puede pasar por Límites o por Funciones. Se multiplican los pesos del camino y se toma el mayor para cada par de ejercicio y destino. En este caso se toma `max(0,60 × 0,50, 0,60 × 0,75) = 0,45`. El resultado del ejercicio es una señal indirecta sobre sus componentes, con pesos iniciales fijados para el piloto. [Descripción de FIRe](https://www.justinmath.com/individualized-spaced-repetition-in-hierarchical-knowledge-structures/).
+- La dosis de la sesión es la suma de los pesos de los aciertos auditados hacia el destino, dividida por la cantidad de preguntas del repaso. Si la estabilidad anterior es `S` y han pasado `t` días desde el último intento directo, la estabilidad aumenta en `dosis × min(t, S)`, con un máximo de 90 días. El vencimiento se calcula desde el intento directo anterior y se actualiza si la fecha resultante es posterior. El crédito cambia la estimación de retención y el vencimiento. El intento directo conserva su propia fecha, maestría, contador y XP. Un repaso vencido permanece en la cola hasta que la evidencia registrada lo aplace.
+- El resumen muestra las operaciones auditadas y cuánto se aplazó la fecha. El historial ya existente guarda el ejercicio, el camino y la dosis junto al intento. El cierre guarda todo en la transacción de la sesión. La opción local `FIRE_ENABLED=0` desactiva el crédito para ejecutar el control. Los respaldos anteriores conservan su progreso y sus sesiones.
+
+| Traza controlada | Repaso directo | FIRe |
+| --- | --- | --- |
+| Día 0, mismo repaso de Continuidad con semilla 1107 y 2/3 aciertos | Desigualdades sigue vencido. | El ejercicio de extensión radical aporta una dosis de 0,15 a Desigualdades y lo aplaza 1,2 días. |
+| Repaso adicional de Desigualdades el día 0 | Variante de semilla 31, 3/3 aciertos y 3 min 30 s simulados. Próximo repaso en 21,6 días. | 0 min adicionales ese día. Desigualdades vuelve a vencer 1,2 días después. |
+| Pruebas separadas a 7 y 14 días, sin práctica intermedia en la traza | Variantes inéditas con semillas 123 y 567. Respuestas de prueba de 3/3 y 2/3. | Las mismas variantes y respuestas de prueba. |
+
+**Evidencia del módulo 6.** Pasaron 21 pruebas con `python -m unittest discover -s tests -v` y pasó `node --check static/app.js`. La comparación usa la API WSGI autenticada, SQLite temporal y reloj controlado. Se verificaron los dos caminos, el crédito único tras reenviar el cierre, el descarte de preguntas falladas y repasos no aprobados, el descuento por anticipación y la protección de temas con seguimiento directo. Se comprobaron dominio, solución exacta y distractores distintos de la familia nueva con 128 semillas. KaTeX local renderizó 2.304 fragmentos de esas variantes. Una prueba con DOM simulado verificó el resumen actual y el de un resultado guardado anterior. El acierto diferido y el tiempo de la tabla son entradas simuladas. El uso de cuota no se midió.
+
+## Publicación de los módulos 1 a 6
+
+Los seis módulos están implementados y se verificaron en conjunto con 21 pruebas automatizadas sobre SQLite y la comprobación de sintaxis de `static/app.js`. El módulo 1 quedó en `4d22f59` y los módulos 2 a 6 quedaron en `0414c8b`. Para verificar la publicación, vincular el SHA de `origin/main` con el despliegue de producción en Vercel y comprobar que la URL sirve el panel actualizado. En producción, una sesión autenticada puede verificar lectura del estado, del diagnóstico y del respaldo. Para verificar reintentos, escritura y restauración, usar datos de prueba en un entorno aislado del progreso personal. [Integración de Git y Vercel](https://vercel.com/docs/git).
+
+## Próxima etapa
+
+La prioridad es hacer útil el piloto en semanas reales de clases e interrogaciones. Completar primero el seguimiento de la práctica y el horario. Ampliar un bloque curricular cada vez, según el ramo y la fecha de evaluación. Los tiempos son estimaciones de trabajo activo, ajustables al presupuesto semanal y a lo que quede verificado en cada sesión.
+
+| Módulo | Entrega y criterio de cierre | Sesiones sugeridas |
+| --- | --- | --- |
+| **7. Seguimiento del aprendizaje** | Registrar duración activa, familia de ejercicio, primer intento, uso de ayuda y fecha de la última práctica. Aprovechar los intentos ya guardados y marcar datos históricos ausentes. Mostrar aciertos sin ayuda y tiempo por tema, con conteos y controles a 7 y 14 días. Verificar pausa, reanudación, doble envío y restauración de un respaldo anterior. | 2 de 45–60 min |
+| **8. Horario de estudio personal** | Definir días, minutos disponibles, ramos prioritarios y fechas de I1, I2, I3 o examen. Recomendar una sesión que quepa en el tiempo disponible, explique su orden y reserve espacio para repasos vencidos y recuperaciones. Tras una ausencia, redistribuir la carga usando el horario siguiente. Probar días con 0 y 20 minutos, una evaluación cercana y el cambio de día y de hora en `America/Santiago`. | 2 de 45–60 min |
+| **9. Siguiente bloque UC** | Elegir el bloque con mayor utilidad para la próxima evaluación. Como primera opción, completar sucesiones de MAT1107 con progresiones, recurrencias e inducción donde corresponda al programa. Definir el mapa de habilidades y sus prerrequisitos. Cada habilidad debe tener un ejemplo, variantes comprobables y un problema de transferencia por bloque. Validar códigos y contenidos con el programa del año de ingreso. | 2–3 de 45–60 min por bloque |
+| **10. Respuesta abierta y retroalimentación** | Empezar con enteros, fracciones exactas y conjuntos solución sencillos. Pedir el resultado antes de mostrar alternativas o pistas. Aceptar representaciones equivalentes y dar retroalimentación según el error. Probar equivalencias, restricciones de dominio, extremos de intervalos y entradas inválidas. Conservar corrección determinista y local. | 2 de 45–60 min |
+| **11. Simulacros de interrogación** | Preparar un simulacro reproducible a partir del temario elegido, con problemas que requieran elegir y combinar métodos. Permitir una duración configurable y mostrar pauta y resultados al cerrar. Probar reanudación, corrección por habilidad y generación de una sesión de repaso a partir de los errores. | 2 de 45–60 min después de los módulos 9 y 10 |
+| **12. Calibración de repaso y FIRe** | Alternar bloques comparables con FIRe activo y con `FIRE_ENABLED=0`, partiendo de respaldos equivalentes. Registrar los minutos de todos los repasos y los aciertos de primer intento sin ayuda en variantes inéditas a 7 y 14 días. Incluir número de respuestas y práctica intermedia. Ampliar las aristas auditadas cuando los datos muestren una carga de repaso menor y un acierto diferido comparable. | 1 sesión de preparación, controles a 7 y 14 días y 1 de análisis |
+| **13. Verificación de versiones y recuperación de datos** | Automatizar las pruebas actuales por commit y comprobar en una base aislada el mismo backend que usa producción. Cubrir la apertura del panel, la actualización de una sesión, la concurrencia y un ciclo de exportación y restauración. Dejar trazable el SHA de producción y probar la lectura de un respaldo anterior con la nueva versión. | 2 de 45–60 min, en paralelo con el módulo 7 si aparece un problema de despliegue |
+
+## Próxima sesión
+
+Arrancar por el módulo 7 con un corte pequeño. Una primera sesión debe producir una medición de primer intento que sobreviva una recarga y aparezca en un respaldo. La interfaz de seguimiento y el experimento de retención pueden venir después. Si la próxima interrogación ya tiene fecha y temario, adelantar el módulo 9 para ese bloque.
 
 ```text
-Lee AGENTS.md y docs/plan-math-academy-uc.md. Si se solicitó el módulo 2,
-contrasta el piloto MAT1107 con el programa del ramo y revisa las variantes
-en curriculum.py y generators.py. Usa semillas reproducibles, soluciones
-exactas, explicaciones y un problema de transferencia. Ejecuta también las
-pruebas de maestría del módulo 1 y registra los resultados en el plan.
+Lee AGENTS.md y las secciones Próxima etapa y Próxima sesión de
+docs/plan-math-academy-uc.md. Ejecuta el primer corte del módulo 7.
+Revisa qué guarda study.py para una respuesta y cómo engine.py guarda
+y restaura la sesión. Añade la medición mínima del primer intento y
+verifica recarga, reintento y respaldo en SQLite temporal. Registra el
+resultado y la siguiente entrega en el plan.
 ```
