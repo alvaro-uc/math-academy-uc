@@ -8,10 +8,33 @@ que capturan errores comunes de Interrogación UC, y solución paso a paso en La
 import math
 import random
 import uuid
+from fractions import Fraction
 
 
-def _make_mcq(prompt, correct_str, wrong_strs, hint, explanation):
+def _make_mcq(prompt, correct_str, wrong_strs, hint, explanation, *, rng=None):
     """Empaqueta una pregunta MCQ barajando las opciones sin duplicados."""
+    if rng is not None:
+        options = [correct_str, *wrong_strs]
+        if len(options) != 4 or len(set(options)) != 4:
+            raise ValueError("La variante debe tener cuatro alternativas distintas")
+        rng.shuffle(options)
+        question_id = f"gen_{rng.getrandbits(64):016x}"
+    else:
+        options = _legacy_options(correct_str, wrong_strs)
+        question_id = "gen_" + uuid.uuid4().hex[:8]
+    return {
+        "id": question_id,
+        "type": "mcq",
+        "is_parametric": True,
+        "prompt": prompt,
+        "options": options,
+        "correct_index": options.index(correct_str),
+        "hint": hint,
+        "explanation": explanation,
+    }
+
+
+def _legacy_options(correct_str, wrong_strs):
     options = [correct_str]
     for w in wrong_strs:
         if w not in options:
@@ -23,24 +46,15 @@ def _make_mcq(prompt, correct_str, wrong_strs, hint, explanation):
         if filler not in options:
             options.append(filler)
     random.shuffle(options)
-    return {
-        "id": "gen_" + uuid.uuid4().hex[:8],
-        "type": "mcq",
-        "is_parametric": True,
-        "prompt": prompt,
-        "options": options,
-        "correct_index": options.index(correct_str),
-        "hint": hint,
-        "explanation": explanation,
-    }
+    return options
 
 
-def gen_inequality_abs(variant=None):
-    v = variant if variant is not None else random.randint(0, 2)
-    if v % 3 == 0:
-        a = random.choice([2, 3, 4, 5])
-        x_center = random.randint(-4, 5)
-        r = random.randint(2, 6)
+def gen_inequality_abs(variant=None, *, rng=random):
+    v = variant % 4 if variant is not None else rng.randrange(4)
+    if v == 0:
+        a = rng.randint(2, 5)
+        x_center = rng.randint(-4, 5)
+        r = rng.randint(2, 6)
         b = a * x_center
         rad = a * r
         low = x_center - r
@@ -51,34 +65,36 @@ def gen_inequality_abs(variant=None):
         wrongs = [
             f"$[{low},\\; {high}]$",
             f"$(-\\infty, {low}) \\cup ({high}, \\infty)$",
-            f"$({-high},\\; {-low})$",
+            f"$(-\\infty, {high})$",
         ]
         hint = f"Escribe $-{rad} < {a}x {sign_b} < {rad}$ y despeja $x$."
         explanation = (
             f"Descomponemos como $-{rad} < {a}x {sign_b} < {rad}$. Sumando ${b}$ obtenemos "
-            f"${b - rad} < {a}x < {b + rad}$, y dividiendo por ${a} > 0$ resulta $x \\in ({low}, {high})$."
+            f"${b - rad} < {a}x < {b + rad}$, y dividiendo por ${a} > 0$ resulta $x \\in ({low}, {high})$. "
+            "Error típico: elegir los intervalos exteriores, que corresponden a distancias mayores."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
-    elif v % 3 == 1:
-        r1 = random.randint(-4, 0)
-        r2 = random.randint(2, 6)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
+    elif v == 1:
+        r1 = rng.randint(-4, 0)
+        r2 = rng.randint(2, 6)
         s1 = f"+ {-r1}" if r1 < 0 else (f"- {r1}" if r1 > 0 else "")
         prompt = f"¿Cuál es el conjunto solución en $\\mathbb{{R}}$ de la inecuación racional $\\frac{{x - {r2}}}{{x {s1}}} \\le 0$?"
         correct = f"$({r1},\\; {r2}]$"
         wrongs = [
             f"$[{r1},\\; {r2}]$",
             f"$(-\\infty, {r1}) \\cup [{r2}, \\infty)$",
-            f"$[{r1},\\; {r2})$",
+            f"$({r1},\\; {r2})$",
         ]
         hint = f"Los puntos críticos son $x = {r1}$ (excluido por anular el denominador) y $x = {r2}$ (incluido)."
         explanation = (
-            f"El cociente es negativo o cero entre las raíces ${r1}$ y ${r2}$. Como $x \\neq {r1}$ para no dividir por cero "
-            f"y $x = {r2}$ anula el numerador, la solución es $({r1}, {r2}]$."
+            f"Para $x < {r1}$ ambos factores son negativos. En $({r1}, {r2})$ el numerador es negativo y el denominador positivo. "
+            f"Para $x > {r2}$ ambos son positivos. Incluimos $x = {r2}$ porque el cociente vale cero. "
+            f"Error típico: incluir $x = {r1}$, donde el denominador vale cero. La solución es $({r1}, {r2}]$."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
-    else:
-        c = random.randint(3, 8)
-        k = random.randint(2, 6)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
+    elif v == 2:
+        c = rng.randint(3, 8)
+        k = rng.randint(2, 6)
         inf_val = c - k
         sup_val = c
         prompt = (
@@ -87,25 +103,50 @@ def gen_inequality_abs(variant=None):
         )
         correct = f"$\\inf(S) = {inf_val},\\; \\sup(S) = {sup_val}$"
         wrongs = [
-            f"$\\inf(S) = 0,\\; \\sup(S) = {sup_val}$",
+            f"$\\inf(S) = {c},\\; \\sup(S) = {c + k}$",
             f"$\\inf(S) = {inf_val},\\; \\sup(S) = {c + k}$",
             f"$\\inf(S) = {-k},\\; \\sup(S) = {sup_val}$",
         ]
         hint = "Evalúa el primer término en $n = 1$ y toma el límite cuando $n \\to \\infty$."
         explanation = (
-            f"La sucesión $x_n = {c} - {k}/n$ es estrictamente creciente. Su mínimo (e ínfimo) ocurre en $n=1$ con "
-            f"${c} - {k} = {inf_val}$, y su supremo es $\\lim_{{n\\to\\infty}} x_n = {sup_val}$."
+            f"Como ${k}/n$ disminuye con $n$, la sucesión crece. Su mínimo e ínfimo es $x_1 = {c}-{k} = {inf_val}$. "
+            f"Todos los términos están por debajo de ${sup_val}$ y se acercan tanto como se quiera a ese valor "
+            f"porque ${k}/n \\to 0$. El supremo es ${sup_val}$. Error típico: confundir el supremo con un máximo alcanzado."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
+    else:
+        c = rng.randint(3, 8)
+        k = rng.randint(2, 6)
+        m = rng.randint(2, 9)
+        threshold = k * m
+        prompt = (
+            f"Sea $a_n = {c} - \\frac{{{k}}}{{n}}$ para enteros $n \\ge 1$. "
+            f"¿Cuál es el menor entero $N \\ge 1$ tal que $|a_n - {c}| < \\frac{{1}}{{{m}}}$ para todo $n \\ge N$?"
+        )
+        correct = f"${threshold + 1}$"
+        wrongs = [f"${threshold}$", f"${m + 1}$", f"${threshold + 2}$"]
+        hint = "Calcula la distancia al límite y despeja $n$ usando que todos los denominadores son positivos."
+        explanation = (
+            f"La distancia es $|a_n - {c}| = {k}/n$. Multiplicando $\\frac{{{k}}}{{n}} < \\frac{{1}}{{{m}}}$ "
+            f"por $n \\cdot {m} > 0$ obtenemos $n > {threshold}$. El primer entero que cumple es $N = {threshold + 1}$ "
+            f"y todos los siguientes también cumplen. Error típico: elegir $N = {threshold}$, donde se alcanza la igualdad."
+        )
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
 
 
-def gen_function_composition(variant=None):
-    v = variant if variant is not None else random.randint(0, 2)
+def _fraction_latex(value):
+    if value.denominator == 1:
+        return str(value.numerator)
+    return f"\\frac{{{value.numerator}}}{{{value.denominator}}}"
+
+
+def gen_function_composition(variant=None, *, rng=random):
+    v = variant if variant is not None else rng.randrange(3)
     if v % 3 == 0:
-        a = random.randint(2, 5)
-        b = random.randint(1, 6)
-        c = random.randint(2, 4)
-        x0 = random.randint(1, 4)
+        a = rng.randint(2, 5)
+        b = rng.randint(1, 6)
+        c = rng.randint(2, 4)
+        x0 = rng.randint(1, 4)
         fx0 = a * x0 + b
         gfx0 = fx0 * fx0 - c
         fgx0 = a * (x0 * x0 - c) + b
@@ -116,20 +157,21 @@ def gen_function_composition(variant=None):
         correct = f"${gfx0}$"
         wrongs = [
             f"${fgx0}$",
-            f"${fx0 * (x0 * x0 - c)}$",
+            f"${fx0 * fx0}$",
             f"${gfx0 + 2 * c}$",
         ]
         hint = f"Evalúa primero la función interna $u = f({x0})$ y luego calcula $g(u)$."
         explanation = (
             f"Primero calculamos $f({x0}) = {a}({x0}) + {b} = {fx0}$. "
-            f"Luego evaluamos $g({fx0}) = ({fx0})^2 - {c} = {fx0*fx0} - {c} = {gfx0}$."
+            f"Luego evaluamos $g({fx0}) = ({fx0})^2 - {c} = {fx0*fx0} - {c} = {gfx0}$. "
+            "Error típico: invertir el orden y calcular $(f \\circ g)$."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
     elif v % 3 == 1:
-        a = random.randint(2, 5)
-        b = random.randint(1, 7)
-        y0 = a * random.randint(2, 6) + b
-        x_inv = (y0 - b) // a
+        a = rng.randint(2, 5)
+        b = rng.randint(1, 7)
+        x_inv = rng.randint(2, 6)
+        y0 = a * x_inv + b
         prompt = (
             f"Sea $f: \\mathbb{{R}} \\to \\mathbb{{R}}$ la función biyectiva $f(x) = {a}x + {b}$. "
             f"Calcule el valor de la función inversa $f^{{-1}}({y0})$."
@@ -137,18 +179,18 @@ def gen_function_composition(variant=None):
         correct = f"${x_inv}$"
         wrongs = [
             f"${a * y0 + b}$",
-            f"${(y0 + b) // a if (y0 + b) % a == 0 else x_inv + 2}$",
+            f"${_fraction_latex(Fraction(y0 + b, a))}$",
             f"$\\frac{{1}}{{{a * y0 + b}}}$",
         ]
         hint = f"Busca el único $x \\in \\mathbb{{R}}$ tal que $f(x) = {a}x + {b} = {y0}$."
         explanation = (
             f"Resolvemos ${a}x + {b} = {y0} \\implies {a}x = {y0 - b} \\implies x = {x_inv}$. "
-            f"Por tanto, $f^{{-1}}({y0}) = {x_inv}$."
+            f"Por tanto, $f^{{-1}}({y0}) = {x_inv}$. Error típico: tomar el recíproco $1/f({y0})$."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
     else:
-        h = random.randint(1, 5)
-        k = random.randint(1, 6)
+        h = rng.randint(1, 5)
+        k = rng.randint(1, 6)
         b_coef = -2 * h
         c_coef = h * h + k
         prompt = (
@@ -157,23 +199,24 @@ def gen_function_composition(variant=None):
         )
         correct = f"$[{k},\\; +\\infty)$"
         wrongs = [
-            f"$[{h},\\; +\\infty)$",
+            f"$({k},\\; +\\infty)$",
             f"$[{c_coef},\\; +\\infty)$",
             f"$(-\\infty,\\; {k}]$",
         ]
         hint = f"Completa el cuadrado: $f(x) = (x - {h})^2 + {k}$."
         explanation = (
             f"Completando el cuadrado obtenemos $f(x) = (x - {h})^2 + {k}$. "
-            f"Para $x \\ge {h}$, $(x - {h})^2 \\ge 0$, por lo que el recorrido es $[{k}, +\\infty)$."
+            f"El mínimo es $f({h}) = {k}$. Cada $y \\ge {k}$ se alcanza tomando $x = {h} + \\sqrt{{y-{k}}}$ "
+            f"en el dominio. Así, el recorrido es $[{k}, +\\infty)$. Error típico: excluir el mínimo."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
 
 
-def gen_limit_rational(variant=None):
-    v = variant if variant is not None else random.randint(0, 2)
+def gen_limit_rational(variant=None, *, rng=random):
+    v = variant if variant is not None else rng.randrange(3)
     if v % 3 == 0:
-        r1 = random.randint(1, 5)
-        r2 = random.choice([i for i in range(-5, 6) if i != r1 and i != -r1])
+        r1 = rng.randint(1, 5)
+        r2 = rng.choice([i for i in range(-5, 6) if i != r1])
         b_coef = -(r1 + r2)
         c_coef = r1 * r2
         val = r1 - r2
@@ -182,7 +225,6 @@ def gen_limit_rational(variant=None):
         prompt = f"Calcule el límite $\\lim_{{x \\to {r1}}} \\frac{{x^2 {b_str} {c_str}}}{{x - {r1}}}$."
         correct = f"${val}$"
         wrongs = [
-            f"${r1 + r2}$",
             f"${-val}$",
             "$0$",
             "No existe",
@@ -190,54 +232,57 @@ def gen_limit_rational(variant=None):
         hint = f"Factoriza el numerador como $(x - {r1})(x - ({r2}))$ para cancelar la indeterminación $0/0$."
         explanation = (
             f"Factorizando el numerador: $\\frac{{(x - {r1})(x - ({r2}))}}{{x - {r1}}} = x - ({r2})$ para $x \\neq {r1}$. "
-            f"Evaluando en $x \\to {r1}$ obtenemos ${r1} - ({r2}) = {val}$."
+            f"Al tomar $x \\to {r1}$ obtenemos ${r1} - ({r2}) = {val}$. "
+            f"Error típico: concluir que el límite no existe porque la función no está definida en $x={r1}$."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        question = _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
+        question["fire_audit"] = "limite_factorizado"
+        return question
     elif v % 3 == 1:
-        a = random.choice([2, 3, 4, 5])
-        k = random.choice([2, 4, 6])
-        ans_num = k
-        ans_den = 2 * a
-        g = math.gcd(ans_num, ans_den)
-        ans_str = f"$\\frac{{{ans_num // g}}}{{{ans_den // g}}}$" if (ans_den // g) != 1 else f"${ans_num // g}$"
+        a = rng.randint(2, 5)
+        k = rng.choice([2, 4, 6])
+        answer = _fraction_latex(Fraction(k, 2 * a))
+        domain_start = _fraction_latex(Fraction(-a * a, k))
         prompt = f"Calcule sin usar L'Hôpital: $\\lim_{{x \\to 0}} \\frac{{\\sqrt{{{a*a} + {k}x}} - {a}}}{{x}}$."
-        correct = ans_str
+        correct = f"${answer}$"
         wrongs = [
-            f"$\\frac{{{k}}}{{{a}}}$",
+            f"${_fraction_latex(Fraction(k, a))}$",
             f"${k * a}$",
             "$0$",
         ]
         hint = f"Multiplica numerador y denominador por el conjugado $\\sqrt{{{a*a} + {k}x}} + {a}$."
         explanation = (
-            f"Racionalizando con el conjugado: $\\frac{{({a*a}+{k}x) - {a*a}}}{{x(\\sqrt{{{a*a}+{k}x}}+{a})}} = "
-            f"\\frac{{{k}}}{{\\sqrt{{{a*a}+{k}x}}+{a}}} \\to \\frac{{{k}}}{{2\\cdot {a}}} = {ans_str.strip('$')}$."
+            f"El radical está definido para $x \\ge {domain_start}$, así que podemos acercarnos a cero desde ambos lados. "
+            f"Para $x \\ne 0$, racionalizamos y cancelamos $x$: $\\frac{{({a*a}+{k}x) - {a*a}}}{{x(\\sqrt{{{a*a}+{k}x}}+{a})}} = "
+            f"\\frac{{{k}}}{{\\sqrt{{{a*a}+{k}x}}+{a}}}$. En el límite queda $\\frac{{{k}}}{{{a}+{a}}}={answer}$. "
+            f"Error típico: contar solo una vez el término ${a}$ del denominador."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
     else:
-        p = random.choice([3, 5, 6, 8, 9])
-        q = random.choice([2, 4, 7])
-        g = math.gcd(p, q)
-        ans_str = f"$\\frac{{{p // g}}}{{{q // g}}}$" if (q // g) != 1 else f"${p // g}$"
-        prompt = f"Usando límites trigonométricos notables, calcule $\\lim_{{x \\to 0}} \\frac{{\\sin({p}x)}}{{{q}x}}$."
-        correct = ans_str
+        p = rng.choice([3, 5, 6, 8, 9])
+        q = rng.choice([2, 4, 7])
+        answer = _fraction_latex(Fraction(p, q))
+        prompt = f"Con ángulos en radianes, calcule $\\lim_{{x \\to 0}} \\frac{{\\sin({p}x)}}{{{q}x}}$."
+        correct = f"${answer}$"
         wrongs = [
-            f"$\\frac{{{q // g}}}{{{p // g}}}$",
+            f"${_fraction_latex(Fraction(q, p))}$",
             "$1$",
             "$0$",
         ]
         hint = f"Reescribe como $\\frac{{{p}}}{{{q}}} \\cdot \\frac{{\\sin({p}x)}}{{{p}x}}$ y usa $\\lim_{{u\\to 0}} \\frac{{\\sin u}}{{u}} = 1$."
         explanation = (
             f"Multiplicando y dividiendo por ${p}$: $\\lim_{{x\\to 0}} \\frac{{{p}}}{{{q}}}\\frac{{\\sin({p}x)}}{{{p}x}} = "
-            f"\\frac{{{p}}}{{{q}}} \\cdot 1 = {ans_str.strip('$')}$."
+            f"\\frac{{{p}}}{{{q}}} \\cdot 1 = {answer}$. "
+            f"Error típico: aplicar el límite notable sin conservar el factor $\\frac{{{p}}}{{{q}}}$."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
 
 
-def gen_continuity_param(variant=None):
-    v = variant if variant is not None else random.randint(0, 1)
+def gen_continuity_param(variant=None, *, rng=random):
+    v = variant if variant is not None else rng.randrange(2)
     if v % 2 == 0:
-        x0 = random.randint(1, 3)
-        c = random.randint(1, 5)
+        x0 = rng.randint(1, 3)
+        c = rng.randint(1, 5)
         a_val = 2 * x0
         b_val = (x0 * x0 + c) - a_val * x0
         prompt = (
@@ -248,17 +293,19 @@ def gen_continuity_param(variant=None):
         wrongs = [
             f"$a = {a_val},\\; b = {x0 * x0 + c}$",
             f"$a = {x0},\\; b = {c}$",
-            f"$a = {a_val},\\; b = {-b_val if b_val != 0 else 2}$",
+            f"$a = {a_val},\\; b = {c}$",
         ]
-        hint = f"Iguala primero las derivadas laterales en $x = {x0}$ para hallar $a = 2({x0})$, y luego iguala los límites laterales para hallar $b$."
+        hint = f"Exige primero continuidad en $x={x0}$. Luego compara los límites laterales del cociente incremental."
         explanation = (
-            f"Para derivabilidad en $x={x0}$ necesitamos $f'_-({x0}) = 2({x0}) = {a_val} = a$. "
-            f"Por continuidad en $x={x0}$: ${x0}^2 + {c} = {a_val}({x0}) + b \\implies {x0*x0+c} = {a_val*x0} + b \\implies b = {b_val}$."
+            f"La continuidad exige ${x0}a+b = {x0*x0+c}$. Con esa igualdad, el cociente incremental para $h>0$ es $a$. "
+            f"Para $h<0$ es $\\frac{{({x0}+h)^2-{x0}^2}}{{h}} = {a_val}+h$. "
+            f"Los límites coinciden si $a={a_val}$. Al sustituir en la condición de continuidad resulta $b={b_val}$. "
+            "Error típico: igualar las pendientes sin comprobar que los tramos coinciden en el empalme."
         )
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        return _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
     else:
-        a = random.randint(2, 4)
-        x0 = random.randint(1, 3)
+        a = rng.randint(2, 4)
+        x0 = rng.randint(1, 3)
         slope = 3 * (x0 ** 2) - a
         prompt = (
             f"Usando la definición de derivada, ¿cuál es la pendiente de la recta tangente a la curva "
@@ -267,12 +314,48 @@ def gen_continuity_param(variant=None):
         correct = f"${slope}$"
         wrongs = [
             f"${3 * (x0 ** 2) + a}$",
-            f"${(x0 ** 3) - a * x0 + 2}$",
-            f"${2 * x0 - a}$",
+            f"${3 * x0 ** 2}$",
+            f"${x0 ** 2 - a}$",
         ]
-        hint = f"Deriva $f'(x) = 3x^2 - {a}$ y evalúa en $x = {x0}$."
-        explanation = f"La derivada es $f'(x) = 3x^2 - {a}$. Evaluando en $x_0 = {x0}$ obtenemos $f'({x0}) = 3({x0})^2 - {a} = {slope}$."
-        return _make_mcq(prompt, correct, wrongs, hint, explanation)
+        hint = f"Expande $({x0}+h)^3$ en el cociente $[f({x0}+h)-f({x0})]/h$."
+        explanation = (
+            f"Al restar, el término constante desaparece: $f({x0}+h)-f({x0}) = (3\\cdot {x0}^2-{a})h+3\\cdot {x0}h^2+h^3$. "
+            f"Dividimos por $h\\ne 0$ y tomamos $h\\to 0$. Queda $f'({x0}) = 3\\cdot {x0}^2-{a} = {slope}$. "
+            f"Error típico: omitir el aporte $-{a}$ del término lineal."
+        )
+        question = _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
+        question["fire_audit"] = "derivada_por_definicion"
+        return question
+
+
+def gen_continuous_radical_extension(*, rng):
+    b = rng.randint(1, 6)
+    root = rng.randint(2, 6)
+    a = b + root**2
+    expression = f"\\sqrt{{\\frac{{x^2-{a+b}x+{a*b}}}{{x-{a}}}}}"
+    domain = f"[{b},\\infty)\\setminus\\{{{a}\\}}"
+    prompt = (
+        f"Para $x\\ne {a}$ se define $f(x)={expression}$ donde la expresión es real. "
+        f"¿Cuál es el dominio natural de la expresión original y qué valor debe tomar "
+        f"$f({a})$ para extenderla por continuidad?"
+    )
+    correct = f"$D={domain},\\quad f({a})={root}$"
+    wrongs = [
+        f"$D=[{b},\\infty),\\quad f({a})={root}$",
+        f"$D=({b},\\infty)\\setminus\\{{{a}\\}},\\quad f({a})={root}$",
+        f"$D={domain},\\quad f({a})={root**2}$",
+    ]
+    hint = "Factoriza el numerador antes de analizar el signo del radicando. Conserva la restricción del denominador."
+    explanation = (
+        f"El numerador es $(x-{a})(x-{b})$. Para $x\\ne {a}$ el radicando se reduce a $x-{b}$, "
+        f"que es no negativo si $x\\ge {b}$. El dominio original es ${domain}$. "
+        f"Como ${a}>{b}$, hay puntos del dominio a ambos lados de ${a}$. "
+        f"El límite de $\\sqrt{{x-{b}}}$ al acercarse a ${a}$ es $\\sqrt{{{root**2}}}={root}$. "
+        f"Error típico: incluir ${a}$ en el dominio original al cancelar el denominador."
+    )
+    question = _make_mcq(prompt, correct, wrongs, hint, explanation, rng=rng)
+    question["fire_audit"] = "extension_radical"
+    return question
 
 
 def gen_logic_truth(variant=None):
@@ -830,9 +913,25 @@ GENERATORS = {
     "clt_sample_mean": gen_clt_sample_mean,
 }
 
+PILOT_FAMILY_COUNTS = {
+    "inequality_abs": 4,
+    "function_composition": 3,
+    "limit_rational": 3,
+    "continuity_param": 2,
+}
 
-def generate_parametric_questions(generator_type, count=2):
+
+def generate_parametric_questions(generator_type, count=2, *, rng=None):
     fn = GENERATORS.get(generator_type, gen_inequality_abs)
+    if generator_type in PILOT_FAMILY_COUNTS:
+        rng = rng if rng is not None else random
+        families = range(PILOT_FAMILY_COUNTS[generator_type])
+        out = []
+        while len(out) < count:
+            batch = rng.sample(families, min(count - len(out), len(families)))
+            out.extend(fn(variant=family, rng=rng) for family in batch)
+        return out
+
     out = []
     seen_prompts = set()
     start_v = random.randint(0, 5)

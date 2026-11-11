@@ -24,7 +24,7 @@ Luego abre en tu navegador: **`http://127.0.0.1:8765`**
    - **Semestre 3 (Anticipación)**: *Cálculo para Ciencia de Datos*, *Álgebra Lineal Avanzada y Modelamiento (SVD/PCA)*, *Matemáticas Discretas*.
    - **Semestre 4 (Anticipación)**: *Optimización para Ciencia de Datos*, *Modelos Probabilísticos*.
 2. **Motor FIRe (*Fractional Implicit Repetition*)**:
-   - Cada tópico avanzado define pesos de abarcamiento (`encompasses`) sobre sus prerrequisitos.
-   - Al aprobar un tópico avanzado (ej. *Regla de la Cadena* o *Mínimos Cuadrados*), el motor propaga crédito de memoria fraccionario hacia los nodos base (*Derivadas*, *Límites*, *Vectores*), extendiendo automáticamente sus intervalos de repaso espaciado sin obligarte a repetir ejercicios básicos.
+   - En el piloto, cada acierto en una pregunta auditada de un repaso aprobado aporta una fracción de repaso a las habilidades que ejercita. El resultado muestra la operación observada y cuánto se aplazó la fecha.
+   - Inicia el servidor con `FIRE_ENABLED=0` para estudiar con el control de repasos directos. Para comparar políticas desde el mismo progreso, usa dos copias SQLite del mismo respaldo.
 3. **Micro-Lecciones + Puentes a Ciencia de Datos + Tips de Interrogación UC**:
    - Cada nodo incluye teoría formal al grano, conexión explícita con Machine Learning / Data Science, estrategia para Interrogaciones UC (I1/I2/I3/Examen), ejemplo resuelto paso a paso y problemas tanto curados como generados paramétricamente al vuelo.

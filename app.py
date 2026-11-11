@@ -87,7 +87,7 @@ def _extract_bearer_token(auth_header):
     return auth_header.strip()
 
 
-def _dispatch_request(method, path, raw_body=b"", auth_header=""):
+def _dispatch_request(method, path, raw_body=b"", auth_header="", query_string=""):
     """Despachador común para BaseHTTPRequestHandler local y WSGI (Vercel)."""
     token = _extract_bearer_token(auth_header)
 
@@ -135,13 +135,14 @@ def _dispatch_request(method, path, raw_body=b"", auth_header=""):
 
         if path.startswith("/api/topic/"):
             topic_id = path.split("/api/topic/", 1)[1].strip("/")
-            payload = engine.get_topic_lesson_payload(topic_id)
+            task_type = urllib.parse.parse_qs(query_string).get("task_type", ["lesson"])[0]
+            payload = engine.get_topic_lesson_payload(topic_id, task_type=task_type)
             if not payload:
                 return 404, "application/json; charset=utf-8", json.dumps({"error": "Tópico no encontrado"}, ensure_ascii=False).encode("utf-8")
             return 200, "application/json; charset=utf-8", json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
         if path == "/api/diagnostic":
-            return 200, "application/json; charset=utf-8", json.dumps({"items": engine.get_diagnostic_questions()}, ensure_ascii=False).encode("utf-8")
+            return 200, "application/json; charset=utf-8", json.dumps(engine.get_diagnostic_session(), ensure_ascii=False).encode("utf-8")
 
         # Servir archivos estáticos
         if path in ("/", "/index.html", "/api", "/api/index.py"):
@@ -190,11 +191,21 @@ def _dispatch_request(method, path, raw_body=b"", auth_header=""):
                 return 400, "application/json; charset=utf-8", json.dumps({"error": str(exc)}, ensure_ascii=False).encode("utf-8")
 
         if path == "/api/diagnostic":
-            engine.ensure_hydrated_from_client(body.get("client_backup"))
-            results = body.get("results", {})
-            target_semester = body.get("target_semester", 1)
-            res = engine.apply_diagnostic_results(results, target_semester)
-            return 200, "application/json; charset=utf-8", json.dumps({"result": res, "state": engine.get_full_state()}, ensure_ascii=False).encode("utf-8")
+            try:
+                engine.ensure_hydrated_from_client(body.get("client_backup"))
+                session = engine.advance_diagnostic(body)
+                return 200, "application/json; charset=utf-8", json.dumps({"diagnostic": session, "state": engine.get_full_state()}, ensure_ascii=False).encode("utf-8")
+            except (TypeError, ValueError) as exc:
+                return 400, "application/json; charset=utf-8", json.dumps({"error": str(exc)}, ensure_ascii=False).encode("utf-8")
+
+        if path == "/api/study":
+            try:
+                engine.ensure_hydrated_from_client(body.get("client_backup"))
+                session = engine.advance_study(body)
+                data = {"session": session, "state": engine.get_full_state()}
+                return 200, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode("utf-8")
+            except (TypeError, ValueError) as exc:
+                return 400, "application/json; charset=utf-8", json.dumps({"error": str(exc)}, ensure_ascii=False).encode("utf-8")
 
         if path == "/api/profile":
             if not body.get("preset_mode"):
@@ -228,7 +239,7 @@ class handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0")) if method == "POST" else 0
         raw_body = self.rfile.read(length) if length > 0 else b""
         auth_header = self.headers.get("Authorization", "")
-        status, ctype, data = _dispatch_request(method, parsed.path, raw_body, auth_header)
+        status, ctype, data = _dispatch_request(method, parsed.path, raw_body, auth_header, parsed.query)
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
@@ -261,7 +272,9 @@ def app(environ, start_response):
         length = 0
     raw_body = environ["wsgi.input"].read(length) if length > 0 and "wsgi.input" in environ else b""
     auth_header = environ.get("HTTP_AUTHORIZATION", "")
-    status_code, ctype, data = _dispatch_request(method, path, raw_body, auth_header)
+    status_code, ctype, data = _dispatch_request(
+        method, path, raw_body, auth_header, environ.get("QUERY_STRING", "")
+    )
     status_map = {
         200: "200 OK",
         400: "400 Bad Request",

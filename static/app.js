@@ -3,24 +3,21 @@
 let APP_STATE = null;
 let SELECTED_NODE_ID = null;
 
-// Active Lesson Session State
-let LESSON_SESSION = {
-  topic: null,
-  taskType: "lesson",
-  stepIndex: 0, // 0 = Theory & Worked Example, 1..N = Questions, N+1 = Summary
-  selectedOption: null,
-  answeredCurrent: false,
-  correctCount: 0,
-  results: [],
+let LESSON_SESSION = null;
+let QUIZ_SESSION = null;
+let STUDY_PENDING = false;
+
+const DIRECT_TASKS = ["review", "prerequisite_check", "quiz_review"];
+const TASK_LABELS = {
+  lesson: "Lección", review: "Repaso", quiz_review: "Repaso del quiz",
+  recovery: "Recuperación guiada", prerequisite_check: "Comprobación de prerrequisito",
+  anticipation: "Anticipación", practice: "Práctica",
 };
 
 // Active Diagnostic Session State
-let DIAG_SESSION = {
-  items: [],
-  idx: 0,
-  selectedOption: null,
-  resultsByTopic: {},
-};
+let DIAG_SESSION = null;
+let DIAG_SELECTION = null;
+let DIAG_PENDING = false;
 
 function renderMath(el) {
   if (!el || typeof renderMathInElement !== "function") return;
@@ -40,7 +37,8 @@ function formatInlineMarkdown(str) {
   // Proteger bloques matemáticos ($$...$$, $...$, \[...\], \(...\)) para no alterar símbolos dentro de LaTeX
   const mathBlocks = [];
   const placeholder = (i) => `\u0000MATH_${i}\u0000`;
-  const protectedStr = str.replace(
+  const escaped = str.replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character]);
+  const protectedStr = escaped.replace(
     /(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g,
     (match) => {
       mathBlocks.push(match);
@@ -191,6 +189,17 @@ function renderTopBar() {
   document.getElementById("xp-today-label").textContent = `${p.today_xp} / ${p.daily_goal_xp} XP hoy`;
   document.getElementById("xp-bar-fill").style.width = `${pct}%`;
   document.getElementById("total-xp-badge").textContent = `${p.total_xp} XP Total`;
+  const diagnosticButton = document.getElementById("btn-open-diagnostic");
+  const diagnosticLabels = {
+    idle: "Diagnóstico del piloto",
+    in_progress: "Retomar diagnóstico",
+    completed: "Resultado del diagnóstico",
+  };
+  diagnosticButton.textContent = diagnosticLabels[APP_STATE.diagnostic] || diagnosticLabels.idle;
+  const modeLabels = {mid_sem1: "Demo · Mitad del semestre 1", sem2_ready: "Demo · Inicio del semestre 2"};
+  const demoLabel = document.getElementById("demo-profile-label");
+  demoLabel.textContent = modeLabels[APP_STATE.preset_mode] || "";
+  demoLabel.classList.toggle("hidden", !demoLabel.textContent);
 
   const semSelect = document.getElementById("select-semester");
   if (semSelect) semSelect.value = String(p.current_semester);
@@ -209,6 +218,8 @@ function renderTopBar() {
 }
 
 function renderDashboard() {
+  renderStudyCards();
+  renderWeeklyActivity();
   const queueEl = document.getElementById("task-queue-list");
   const recs = APP_STATE.recommendations || [];
 
@@ -218,25 +229,11 @@ function renderDashboard() {
     queueEl.innerHTML = recs
       .map((r) => {
         const badgeClass =
-          r.task_type === "review"
+          ["review", "recovery", "prerequisite_check", "quiz_review"].includes(r.task_type)
             ? "badge-review"
             : r.task_type === "anticipation"
             ? "badge-anticipation"
             : "badge-lesson";
-        const implicitHtml =
-          r.implicit_rep_topics && r.implicit_rep_topics.length > 0
-            ? `<div class="task-fire-info">
-                <span>⚡ Crédito implícito FIRe a:</span>
-                ${r.implicit_rep_topics
-                  .slice(0, 3)
-                  .map(
-                    (it) =>
-                      `<span class="fire-chip">${it.title} (${Math.round(it.weight * 100)}%)</span>`
-                  )
-                  .join("")}
-               </div>`
-            : `<div class="task-fire-info"><span>🌱 Tópico fundacional · Desbloquea ${r.unlocks_count} tema(s) posterior(es)</span></div>`;
-
         return `
           <article class="task-card type-${r.task_type}">
             <div class="task-left">
@@ -246,7 +243,7 @@ function renderDashboard() {
                 <span style="font-size:0.75rem;color:var(--text-light)">⏱ ~${r.estimated_mins} min</span>
               </div>
               <div class="task-title">${r.title}</div>
-              ${implicitHtml}
+              <div class="task-fire-info">${r.reason}</div>
             </div>
             <div class="task-right">
               <span class="xp-reward">+${r.xp} XP</span>
@@ -264,11 +261,12 @@ function renderDashboard() {
   const topics = APP_STATE.topics || [];
   const masteredCnt = topics.filter((t) => t.status === "mastered" || t.status === "review_due").length;
   const frontierCnt = topics.filter((t) => t.status === "available" || t.status === "in_progress").length;
-  const reviewCnt = topics.filter((t) => t.status === "review_due").length;
+  const reviewIds = new Set(APP_STATE.study.quiz_reviews);
+  topics.filter((t) => t.status === "review_due").forEach((t) => reviewIds.add(t.id));
 
   document.getElementById("kpi-mastered").textContent = `${masteredCnt}/${topics.length}`;
   document.getElementById("kpi-available").textContent = String(frontierCnt);
-  document.getElementById("kpi-reviews").textContent = String(reviewCnt);
+  document.getElementById("kpi-reviews").textContent = String(reviewIds.size);
 
   // Courses progress sidebar
   const cList = document.getElementById("sidebar-courses-progress");
@@ -278,17 +276,90 @@ function renderDashboard() {
       <div class="course-mini-item">
         <div class="course-mini-header">
           <span>S${c.semester} · ${c.name}</span>
-          <span>${c.progress_pct}%</span>
+          <span>${c.progress_pct}% de maestría media</span>
         </div>
         <div class="course-mini-bar">
           <div class="course-mini-fill" style="width:${c.progress_pct}%; background:${c.color}"></div>
         </div>
+        <small>${c.mastered_topics} de ${c.total_topics} temas dominados</small>
       </div>
     `
     )
     .join("");
 
   renderMath(document.getElementById("view-dashboard"));
+}
+
+function renderStudyCards() {
+  const { lessons, last_lesson: last, quiz } = APP_STATE.study;
+  const topics = Object.fromEntries(APP_STATE.topics.map((topic) => [topic.id, topic]));
+  const cards = lessons.map((lesson) => {
+    const topic = topics[lesson.topic_id];
+    return `
+      <article class="task-card study-card">
+        <div class="task-left">
+          <span class="study-meta">${TASK_LABELS[lesson.task_type]} en curso · ${topic.course_code}</span>
+          <h3 class="task-title">${formatInlineMarkdown(topic.title)}</h3>
+          <progress aria-label="Respuestas confirmadas" value="${lesson.answered}" max="${lesson.total}"></progress>
+          <span class="study-meta">${lesson.answered} de ${lesson.total} respuestas confirmadas</span>
+          ${renderPrerequisites(topic, topics)}
+        </div>
+        <button class="btn-primary" onclick="resumeLesson('${lesson.slot}', '${lesson.id}')">Retomar</button>
+      </article>`;
+  });
+  const quizReady = quiz.eligible >= 2 || quiz.status !== "idle";
+  const quizLabel = {
+    idle: "Iniciar quiz", in_progress: "Retomar quiz", completed: "Ver resultado",
+  }[quiz.status];
+  const quizDescription = {
+    idle: quizReady ? "Resuelve variantes nuevas de los temas que ya viste." : "Responde ejercicios de al menos dos temas del piloto para habilitarlo.",
+    in_progress: `${quiz.answered} de ${quiz.total} respuestas confirmadas`,
+    completed: `${quiz.total} preguntas completadas`,
+  }[quiz.status];
+  document.getElementById("study-cards").innerHTML = `
+    ${cards.join("")}
+    <article class="task-card study-card quiz-card">
+      <div class="task-left">
+        <span class="study-meta">MAT1107 y puente a Cálculo I</span>
+        <h3 class="task-title">Quiz acumulativo</h3>
+        <p class="study-meta">${quizDescription}</p>
+      </div>
+      <button class="btn-outline" onclick="openQuiz()" ${quizReady ? "" : "disabled"}>${quizLabel}</button>
+    </article>
+    ${last ? `<button class="btn-ghost study-last" onclick="resumeLesson('${last.slot}', '${last.id}')">
+      Ver resultado de la última práctica
+    </button>` : ""}
+  `;
+}
+
+function renderWeeklyActivity() {
+  const days = APP_STATE.activity_7d;
+  const peak = Math.max(1, ...days.map((day) => day.xp));
+  const xp = days.reduce((total, day) => total + day.xp, 0);
+  const sessions = days.reduce((total, day) => total + day.sessions, 0);
+  const labels = new Intl.DateTimeFormat("es-CL", { weekday: "short", day: "numeric", timeZone: "UTC" });
+  document.getElementById("activity-7d").innerHTML = `
+    <p class="study-meta">${xp} XP · ${sessions} ${sessions === 1 ? "sesión" : "sesiones"}</p>
+    <ul class="activity-week">
+      ${days.map((day) => {
+        const label = labels.format(new Date(day.date));
+        return `<li title="${day.xp} XP · ${day.sessions} ${day.sessions === 1 ? "sesión" : "sesiones"}">
+          <span class="activity-xp">${day.xp}</span>
+          <div class="activity-track" aria-hidden="true"><div style="height:${100 * day.xp / peak}%"></div></div>
+          <time datetime="${day.date}">${label}</time>
+        </li>`;
+      }).join("")}
+    </ul>`;
+}
+
+function renderPrerequisites(topic, byId) {
+  if (!topic.prereqs.length) return '<p class="study-meta">Sin prerrequisitos</p>';
+  return `<div class="study-meta">
+    <strong>Prerrequisitos</strong>
+    <ul class="prereq-list">${topic.prereqs.map((id) => `
+      <li>${formatInlineMarkdown(byId[id].title)} · ${topic.met_prereqs.includes(id) ? "Cumplido" : "Pendiente"}</li>
+    `).join("")}</ul>
+  </div>`;
 }
 
 function renderDAG() {
@@ -308,7 +379,7 @@ function renderDAG() {
               t.status === "mastered"
                 ? `✓ ${Math.round(t.mastery * 100)}%`
                 : t.status === "review_due"
-                ? "↻ Repaso FIRe"
+                ? "↻ Repaso pendiente"
                 : t.status === "available" || t.status === "in_progress"
                 ? "● Frontera"
                 : "🔒 Bloqueado";
@@ -390,26 +461,6 @@ function renderNodeInspector(topicId) {
   if (!t) return;
 
   const byId = Object.fromEntries((APP_STATE.topics || []).map((x) => [x.id, x]));
-  const prereqList =
-    t.prereqs.length > 0
-      ? t.prereqs
-          .map((pid) => `<li>${byId[pid] ? byId[pid].title : pid}</li>`)
-          .join("")
-      : "<li>Sin prerrequisitos (Nodo raíz de Semestre 1)</li>";
-
-  const implicitEntries = Object.entries(t.implicit_targets || {});
-  const implicitHtml =
-    implicitEntries.length > 0
-      ? implicitEntries
-          .map(
-            ([sid, w]) =>
-              `<li><strong>${byId[sid] ? byId[sid].title : sid}</strong>: recibe <code>${Math.round(
-                w * 100
-              )}%</code> de crédito FIRe</li>`
-          )
-          .join("")
-      : "<li>No abarca nodos previos.</li>";
-
   inspector.innerHTML = `
     <div style="margin-bottom:0.65rem">
       <span class="badge badge-course">${t.course_name} · Semestre ${t.semester}</span>
@@ -420,13 +471,7 @@ function renderNodeInspector(topicId) {
     </div>
 
     <div style="font-size:0.8rem;margin-bottom:0.75rem">
-      <strong>Prerrequisitos directos:</strong>
-      <ul style="padding-left:1.1rem;margin-top:0.25rem;color:var(--text-muted)">${prereqList}</ul>
-    </div>
-
-    <div style="font-size:0.8rem;margin-bottom:1rem">
-      <strong>Repetición Implícita (FIRe):</strong>
-      <ul style="padding-left:1.1rem;margin-top:0.25rem;color:var(--text-muted)">${implicitHtml}</ul>
+      ${renderPrerequisites(t, byId)}
     </div>
 
     <button class="btn-primary" style="width:100%" onclick="startLesson('${t.id}', 'lesson')">
@@ -482,42 +527,144 @@ function renderCoursesCatalog() {
    INTERACTIVE MICRO-LESSON & PRACTICE ENGINE
    ============================================================================ */
 
-async function startLesson(topicId, taskType = "lesson") {
-  const res = await apiFetch(`/api/topic/${topicId}`);
-  if (!res.ok) return;
-  const topic = await res.json();
+async function requestStudy(payload, showModal = false) {
+  if (STUDY_PENDING) return;
+  STUDY_PENDING = true;
+  const modal = document.getElementById("lesson-modal");
+  const footer = document.getElementById("lesson-footer");
+  const buttons = [...footer.querySelectorAll("button:enabled")];
+  buttons.forEach((button) => { button.disabled = true; });
+  document.getElementById("study-status").textContent = "";
+  document.getElementById("lesson-status").textContent = "";
+  const token = getAuthToken();
+  try {
+    const res = await apiFetch("/api/study", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, client_backup: getLocalBackup() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "No se pudo guardar el paso.");
+    if (getAuthToken() !== token) return;
+    APP_STATE = data.state;
+    renderAll();
+    if (payload.kind === "quiz") {
+      QUIZ_SESSION = { ...data.session, selectedOption: null };
+      LESSON_SESSION = null;
+    } else {
+      const { topic, task_type, answers, step, result, slot, id } = data.session;
+      LESSON_SESSION = {
+        topic, id, slot, answers,
+        directRetrieval: DIRECT_TASKS.includes(task_type),
+        stepIndex: step,
+        selectedOption: step > 0 && step <= answers.length ? answers[step - 1] : null,
+        answeredCurrent: step > 0 && step <= answers.length,
+        correctCount: answers.filter((answer, index) => answer === topic.questions[index].correct_index).length,
+        completionResponse: result,
+      };
+      QUIZ_SESSION = null;
+    }
+    if (showModal) {
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+    }
+    if (!modal.classList.contains("hidden")) {
+      if (QUIZ_SESSION) renderQuiz();
+      else renderLessonStep();
+      document.getElementById("lesson-title").focus();
+    }
+  } catch (error) {
+    if (error.message === "Unauthorized") return;
+    const target = modal.classList.contains("hidden") ? "study-status" : "lesson-status";
+    document.getElementById(target).textContent = error.message || "No se pudo conectar. Intenta de nuevo.";
+  } finally {
+    STUDY_PENDING = false;
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+}
 
-  LESSON_SESSION = {
-    topic,
-    taskType,
-    stepIndex: 0, // 0 = Theory + Worked Example, 1..N = Questions, N+1 = Summary
-    selectedOption: null,
-    answeredCurrent: false,
-    correctCount: 0,
-    results: [],
-    completionResponse: null,
-  };
+function startLesson(topicId, taskType = "lesson") {
+  return requestStudy({ kind: "lesson", action: "open", topic_id: topicId, task_type: taskType }, true);
+}
 
-  document.getElementById("lesson-modal").classList.remove("hidden");
-  renderLessonStep();
+function resumeLesson(slot, sessionId) {
+  return requestStudy({ kind: "lesson", action: "resume", slot, session_id: sessionId }, true);
+}
+
+function openQuiz(restartFrom) {
+  return requestStudy({ kind: "quiz", action: "open", restart_from: restartFrom }, true);
 }
 
 function closeLessonModal() {
-  document.getElementById("lesson-modal").classList.add("hidden");
+  const modal = document.getElementById("lesson-modal");
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function renderStudyOptions(question, choice, confirmed = false) {
+  return `<div class="options-grid" id="question-options">${question.options.map((option, index) => {
+    let state = choice === index ? "selected" : "";
+    if (confirmed && index === question.correct_index) state = "correct";
+    else if (confirmed && index === choice) state = "wrong";
+    return `<button class="option-btn ${state}" onclick="selectQuestionOption(${index})"
+      aria-pressed="${choice === index}" ${confirmed ? "disabled" : ""}>
+      <span class="option-key">${"ABCD"[index] || index + 1}</span>
+      <span>${formatInlineMarkdown(option)}</span>
+    </button>`;
+  }).join("")}</div>`;
+}
+
+function renderQuiz() {
+  const session = QUIZ_SESSION;
+  const body = document.getElementById("lesson-body");
+  const footer = document.getElementById("lesson-footer");
+  document.getElementById("lesson-course-tag").textContent = "MAT1107 y puente a Cálculo I";
+  document.getElementById("lesson-title").textContent = "Quiz acumulativo";
+  document.getElementById("lesson-stepper").textContent = `${session.answered} / ${session.total} respondidas`;
+  if (session.status === "completed") {
+    const correct = session.results.filter((item) => item.correct).length;
+    body.innerHTML = `
+      <p><strong>${correct} de ${session.total} correctas</strong> · +${session.xp_earned} XP</p>
+      <p class="study-meta">${correct === session.total ? "Acertaste en todos los temas del quiz." : "La cola incluye un repaso por cada tema en el que fallaste."}</p>
+      ${session.results.map((item) => `
+        <div class="feedback-banner quiz-feedback ${item.correct ? "ok" : "err"}">
+          <strong>${item.correct ? "✓" : "✗"} ${formatInlineMarkdown(item.title)}</strong>
+          <p>${formatInlineMarkdown(item.prompt)}</p>
+          <p>Tu respuesta · ${formatInlineMarkdown(item.chosen)}</p>
+          <p>Respuesta correcta · ${formatInlineMarkdown(item.correct_answer)}</p>
+          <p>${formatInlineMarkdown(item.explanation)}</p>
+        </div>`
+      ).join("")}`;
+    footer.innerHTML = `
+      <button class="btn-outline" onclick="openQuiz('${session.id}')">Nuevo quiz</button>
+      <button class="btn-primary" onclick="closeLessonModal()">Volver al panel</button>`;
+  } else {
+    body.innerHTML = `
+      <p class="study-meta">Pregunta ${session.answered + 1} de ${session.total}</p>
+      <div class="question-prompt">${formatInlineMarkdown(session.question.prompt)}</div>
+      ${renderStudyOptions(session.question, session.selectedOption)}`;
+    footer.innerHTML = `
+      <span class="study-meta">Soluciones disponibles al terminar</span>
+      <button class="btn-primary" id="btn-Verify-Answer" onclick="verifyCurrentQuestion()" disabled>
+        ${session.answered + 1 === session.total ? "Finalizar quiz" : "Confirmar y continuar"}
+      </button>`;
+  }
+  body.scrollTop = 0;
+  renderMath(body);
 }
 
 function renderLessonStep() {
-  const { topic, stepIndex } = LESSON_SESSION;
+  const { topic, stepIndex, directRetrieval } = LESSON_SESSION;
   const totalQuestions = topic.questions.length;
 
   document.getElementById("lesson-course-tag").textContent = `${topic.course_name} · Semestre ${topic.semester}`;
   document.getElementById("lesson-title").textContent = topic.title;
 
-  // Stepper pills: 1 for Theory + 1 per Question
+  // Los repasos y las comprobaciones comienzan con el primer problema.
   const totalSteps = 1 + totalQuestions;
   const stepperEl = document.getElementById("lesson-stepper");
   let pillsHtml = "";
-  for (let i = 0; i < totalSteps; i++) {
+  for (let i = directRetrieval ? 1 : 0; i < totalSteps; i++) {
     const cls = i < stepIndex ? "done" : i === stepIndex ? "active" : "";
     pillsHtml += `<span class="step-pill ${cls}"></span>`;
   }
@@ -525,6 +672,7 @@ function renderLessonStep() {
 
   const bodyEl = document.getElementById("lesson-body");
   const footerEl = document.getElementById("lesson-footer");
+  bodyEl.scrollTop = 0;
 
   if (stepIndex === 0) {
     // STEP 0: Micro-Teoría + Conexión Ciencia de Datos + Tip Interrogación UC + Ejemplo Resuelto
@@ -580,7 +728,8 @@ function renderLessonStep() {
   if (stepIndex >= 1 && stepIndex <= totalQuestions) {
     const qIdx = stepIndex - 1;
     const q = topic.questions[qIdx];
-    const keys = ["A", "B", "C", "D"];
+    const { selectedOption, answeredCurrent } = LESSON_SESSION;
+    const correct = selectedOption === q.correct_index;
 
     bodyEl.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.55rem">
@@ -589,36 +738,29 @@ function renderLessonStep() {
       q.is_parametric ? "Generador Paramétrico Dinámico" : "Problema Tipo Interrogación UC"
     }
         </span>
-        <button class="btn-ghost" onclick="toggleHint()">💡 Ver Pista</button>
+        ${directRetrieval ? "" : '<button class="btn-ghost" onclick="toggleHint()">💡 Ver Pista</button>'}
       </div>
 
       <div class="question-prompt">${formatInlineMarkdown(q.prompt)}</div>
 
-      <div class="options-grid" id="question-options">
-        ${q.options
-          .map(
-            (opt, idx) => `
-          <button class="option-btn" id="opt-btn-${idx}" onclick="selectQuestionOption(${idx})">
-            <span class="option-key">${keys[idx] || idx + 1}</span>
-            <span>${formatInlineMarkdown(opt)}</span>
-          </button>
-        `
-          )
-          .join("")}
-      </div>
+      ${renderStudyOptions(q, selectedOption, answeredCurrent)}
 
-      <div id="question-hint" class="hint-box" style="display:none">
+      ${directRetrieval ? "" : `<div id="question-hint" class="hint-box" style="display:none">
         <strong>Pista:</strong> ${formatInlineMarkdown(q.hint)}
-      </div>
+      </div>`}
 
-      <div id="question-feedback"></div>
+      ${answeredCurrent ? `
+        <div class="feedback-banner ${correct ? "ok" : "err"}">
+          <strong>${correct ? "✓ ¡Correcto!" : "✗ Respuesta incorrecta."}</strong>
+          <p>${formatInlineMarkdown(q.explanation)}</p>
+        </div>` : ""}
     `;
 
     footerEl.innerHTML = `
       <span style="font-size:0.8rem;color:var(--text-muted)">Atajo: teclas 1–4 para elegir, Enter para verificar</span>
       <div style="display:flex;gap:0.5rem">
-        <button class="btn-primary" id="btn-Verify-Answer" onclick="verifyCurrentQuestion()">
-          Verificar Respuesta
+        <button class="btn-primary" id="btn-Verify-Answer" onclick="verifyCurrentQuestion()" ${selectedOption === null ? "disabled" : ""}>
+          ${answeredCurrent ? (stepIndex === totalQuestions ? "Finalizar y registrar XP" : "Siguiente problema") : "Verificar respuesta"}
         </button>
       </div>
     `;
@@ -639,73 +781,37 @@ function toggleHint() {
 }
 
 function selectQuestionOption(idx) {
-  if (LESSON_SESSION.answeredCurrent) return;
-  LESSON_SESSION.selectedOption = idx;
+  const session = QUIZ_SESSION || LESSON_SESSION;
+  if (STUDY_PENDING || !session || session.answeredCurrent) return;
+  const question = QUIZ_SESSION ? session.question : session.topic.questions[session.stepIndex - 1];
+  if (!question || idx >= question.options.length) return;
+  session.selectedOption = idx;
   document.querySelectorAll("#question-options .option-btn").forEach((btn, i) => {
     btn.classList.toggle("selected", i === idx);
+    btn.setAttribute("aria-pressed", String(i === idx));
   });
+  document.getElementById("btn-Verify-Answer").disabled = false;
 }
 
-async function verifyCurrentQuestion() {
-  if (LESSON_SESSION.answeredCurrent) {
-    nextLessonStep();
-    return;
-  }
-  if (LESSON_SESSION.selectedOption === null) return;
-
-  const qIdx = LESSON_SESSION.stepIndex - 1;
-  const q = LESSON_SESSION.topic.questions[qIdx];
-  const chosen = LESSON_SESSION.selectedOption;
-  const isCorrect = chosen === q.correct_index;
-
-  LESSON_SESSION.answeredCurrent = true;
-  if (isCorrect) LESSON_SESSION.correctCount += 1;
-
-  document.querySelectorAll("#question-options .option-btn").forEach((btn, i) => {
-    btn.disabled = true;
-    if (i === q.correct_index) btn.classList.add("correct");
-    else if (i === chosen && !isCorrect) btn.classList.add("wrong");
-  });
-
-  const fb = document.getElementById("question-feedback");
-  fb.innerHTML = `
-    <div class="feedback-banner ${isCorrect ? "ok" : "err"}">
-      <strong>${isCorrect ? "✓ ¡Correcto!" : "✗ Respuesta incorrecta."}</strong>
-      <div style="margin-top:0.3rem">${formatInlineMarkdown(q.explanation)}</div>
-    </div>
-  `;
-  renderMath(fb);
-
-  const btn = document.getElementById("btn-Verify-Answer");
-  const isLast = LESSON_SESSION.stepIndex === LESSON_SESSION.topic.questions.length;
-  btn.textContent = isLast ? "Finalizar y Registrar XP →" : "Siguiente Problema →";
-}
-
-async function nextLessonStep() {
-  const totalQuestions = LESSON_SESSION.topic.questions.length;
-  if (LESSON_SESSION.stepIndex === totalQuestions) {
-    // Enviar resultado al motor FIRe junto con el respaldo local para entornos serverless
-    const res = await apiFetch("/api/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        topic_id: LESSON_SESSION.topic.id,
-        correct_count: LESSON_SESSION.correctCount,
-        total_count: totalQuestions,
-        task_type: LESSON_SESSION.taskType,
-        client_backup: getLocalBackup(),
-      }),
+function verifyCurrentQuestion() {
+  const session = QUIZ_SESSION || LESSON_SESSION;
+  if (!session || session.selectedOption === null) return;
+  if (QUIZ_SESSION) {
+    return requestStudy({
+      kind: "quiz", action: "advance", session_id: session.id,
+      answered: session.answered, choice: session.selectedOption,
     });
-    const data = await res.json();
-    LESSON_SESSION.completionResponse = data.result;
-    APP_STATE = data.state;
-    renderAll();
   }
+  if (session.answeredCurrent) return nextLessonStep();
+  return nextLessonStep({ choice: session.selectedOption });
+}
 
-  LESSON_SESSION.stepIndex += 1;
-  LESSON_SESSION.selectedOption = null;
-  LESSON_SESSION.answeredCurrent = false;
-  renderLessonStep();
+function nextLessonStep(answer = {}) {
+  const session = LESSON_SESSION;
+  return requestStudy({
+    kind: "lesson", action: "advance", slot: session.slot, session_id: session.id,
+    step: session.stepIndex, answered: session.answers.length, ...answer,
+  });
 }
 
 function renderLessonSummary() {
@@ -718,17 +824,21 @@ function renderLessonSummary() {
     res && res.implicit_boosted && res.implicit_boosted.length > 0
       ? `
       <div style="margin-top:1rem;padding:0.9rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
-        <strong style="color:#15803d">⚡ Propagación FIRe (Repetición Implícita Fraccionaria):</strong>
+        <strong style="color:#15803d">Crédito de repaso FIRe</strong>
         <p style="font-size:0.83rem;color:#166534;margin-top:0.2rem">
-          Al aprobar este intento, el motor extendió el intervalo de repaso de tus prerrequisitos:
+          Tus aciertos aportaron evidencia para aplazar estos repasos.
         </p>
         <ul style="padding-left:1.2rem;margin-top:0.4rem;font-size:0.83rem;color:#14532d">
           ${res.implicit_boosted
             .map(
-              (b) =>
-                `<li><strong>${b.title}</strong> (peso ${Math.round(
-                  b.weight * 100
-                )}%) → nueva estabilidad: <strong>${b.new_stability_days} días</strong></li>`
+              (b) => {
+                const operations = [...new Set((b.evidence || []).flatMap((item) => item.operations))];
+                const change = b.postponed_days === undefined
+                  ? `estabilidad registrada de ${b.new_stability_days} días`
+                  : `repaso aplazado ${b.postponed_days.toLocaleString("es-CL")} días`;
+                return `<li><strong>${formatInlineMarkdown(b.title)}</strong> · ${change}
+                  ${operations.length ? `<br>${operations.map(formatInlineMarkdown).join(" ")}` : ""}</li>`;
+              }
             )
             .join("")}
         </ul>
@@ -748,19 +858,19 @@ function renderLessonSummary() {
   )}%).
       </p>
 
-      <div style="display:flex;justify-content:center;gap:1rem;margin-top:1.1rem">
-        <div class="kpi-box" style="min-width:130px">
+      <div class="lesson-result-grid">
+        <div class="kpi-box">
           <div class="kpi-val" style="color:var(--emerald)">+${res ? res.xp_earned : 0} XP</div>
           <div class="kpi-label">XP Ganado</div>
         </div>
-        <div class="kpi-box" style="min-width:130px">
+        <div class="kpi-box">
           <div class="kpi-val">${res ? Math.round(res.new_mastery * 100) : 0}%</div>
           <div class="kpi-label">Maestría del Tópico</div>
         </div>
         ${res && res.review_scheduled ? `
-          <div class="kpi-box" style="min-width:130px">
+          <div class="kpi-box">
             <div class="kpi-val">${res.new_stability_days} d</div>
-            <div class="kpi-label">Próximo Repaso FIRe</div>
+            <div class="kpi-label">${res.recovery_scheduled ? "Próxima recuperación" : "Próximo repaso"}</div>
           </div>
         ` : ""}
       </div>
@@ -783,47 +893,95 @@ function renderLessonSummary() {
    ============================================================================ */
 
 async function openDiagnosticModal() {
-  const res = await apiFetch("/api/diagnostic");
-  const data = await res.json();
-  DIAG_SESSION = {
-    items: data.items || [],
-    idx: 0,
-    selectedOption: null,
-    resultsByTopic: {},
-  };
-  document.getElementById("diagnostic-modal").classList.remove("hidden");
+  const modal = document.getElementById("diagnostic-modal");
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  if (DIAG_PENDING) return;
+  DIAG_SESSION = null;
+  DIAG_SELECTION = null;
   renderDiagnosticStep();
+  await requestDiagnostic();
 }
 
 function closeDiagnosticModal() {
-  document.getElementById("diagnostic-modal").classList.add("hidden");
+  const modal = document.getElementById("diagnostic-modal");
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
 }
 
-function renderDiagnosticStep() {
+async function requestDiagnostic(payload) {
+  if (DIAG_PENDING) return;
+  DIAG_PENDING = true;
+  renderDiagnosticStep();
+  let error = "";
+  try {
+    const options = payload && {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, client_backup: getLocalBackup() }),
+    };
+    const res = await apiFetch("/api/diagnostic", options);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    DIAG_SESSION = payload ? data.diagnostic : data;
+    DIAG_SELECTION = null;
+    if (data.state) {
+      APP_STATE = data.state;
+      renderAll();
+    }
+  } catch (_) {
+    error = "No se pudo actualizar el diagnóstico. Vuelve a intentarlo.";
+  } finally {
+    DIAG_PENDING = false;
+    renderDiagnosticStep(error);
+  }
+}
+
+function renderDiagnosticStep(error = "") {
   const bodyEl = document.getElementById("diagnostic-body");
   const footerEl = document.getElementById("diagnostic-footer");
-  const { items, idx } = DIAG_SESSION;
-
-  if (idx >= items.length) {
-    finishDiagnostic();
+  const disabled = DIAG_PENDING ? "disabled" : "";
+  const errorMessage = error ? `<p role="alert">${error}</p>` : "";
+  if (!DIAG_SESSION) {
+    bodyEl.innerHTML = errorMessage || '<p role="status">Cargando diagnóstico…</p>';
+    footerEl.innerHTML = error ? '<button class="btn-primary" onclick="requestDiagnostic()">Reintentar</button>' : "";
+    return;
+  }
+  const { status, answered, max_questions: limit, item } = DIAG_SESSION;
+  if (status === "idle") {
+    bodyEl.innerHTML = `
+      <p>El diagnóstico se adapta a tus respuestas y dura hasta ${limit} preguntas.</p>
+      <p>Puedes cerrar y retomar después. Las respuestas se guardan al confirmar.</p>
+      ${errorMessage}
+    `;
+    footerEl.innerHTML = `<button class="btn-primary" ${disabled} onclick="startDiagnostic()">Empezar</button>`;
+    return;
+  }
+  if (status === "completed") {
+    renderDiagnosticResult(bodyEl, footerEl, errorMessage, disabled);
     return;
   }
 
-  const item = items[idx];
   const q = item.question;
   const keys = ["A", "B", "C", "D"];
-
+  const reasons = {
+    initial: "Pregunta inicial",
+    successor: "Comprobación del tema siguiente",
+    prerequisite: "Comprobación de un prerrequisito",
+    confirm_inference: "Confirmación de una inferencia",
+    resolve_conflict: "Segunda pregunta para aclarar evidencia contradictoria",
+  };
   bodyEl.innerHTML = `
-    <div style="margin-bottom:0.75rem;display:flex;justify-content:space-between;align-items:center">
-      <span class="badge badge-lesson">Pregunta ${idx + 1} de ${items.length} · ${item.course_name}</span>
-      <span style="font-size:0.78rem;color:var(--text-muted)">Evalúa: ${item.topic_title}</span>
-    </div>
+    <p><span class="badge badge-lesson">Pregunta ${answered + 1} · Máximo ${limit}</span></p>
+    <h4>${item.topic_title}</h4>
+    <p>${reasons[item.reason]}</p>
     <div class="question-prompt">${formatInlineMarkdown(q.prompt)}</div>
     <div class="options-grid" id="diag-options">
       ${q.options
         .map(
           (opt, i) => `
-        <button class="option-btn" onclick="selectDiagOption(${i})">
+        <button class="option-btn ${i === DIAG_SELECTION ? "selected" : ""}"
+                aria-pressed="${i === DIAG_SELECTION}" ${disabled} onclick="selectDiagOption(${i})">
           <span class="option-key">${keys[i]}</span>
           <span>${formatInlineMarkdown(opt)}</span>
         </button>
@@ -831,70 +989,68 @@ function renderDiagnosticStep() {
         )
         .join("")}
     </div>
+    ${errorMessage}
   `;
 
   footerEl.innerHTML = `
-    <button class="btn-ghost" onclick="skipDiagQuestion()">Todavía no he visto este tema (Saltar)</button>
-    <button class="btn-primary" onclick="submitDiagQuestion()">Confirmar y Continuar →</button>
+    <button class="btn-ghost" ${disabled} onclick="submitDiagQuestion(null)">Omitir pregunta</button>
+    <button id="btn-confirm-diagnostic" class="btn-primary" ${DIAG_PENDING || DIAG_SELECTION === null ? "disabled" : ""}
+            onclick="submitDiagQuestion(DIAG_SELECTION)">Confirmar y continuar</button>
   `;
   renderMath(bodyEl);
 }
 
 function selectDiagOption(i) {
-  DIAG_SESSION.selectedOption = i;
+  if (DIAG_PENDING) return;
+  DIAG_SELECTION = i;
   document.querySelectorAll("#diag-options .option-btn").forEach((btn, idx) => {
     btn.classList.toggle("selected", idx === i);
+    btn.setAttribute("aria-pressed", String(idx === i));
+  });
+  document.getElementById("btn-confirm-diagnostic").disabled = false;
+}
+
+function startDiagnostic() {
+  return requestDiagnostic({ start: true, restart_from: DIAG_SESSION.session_id });
+}
+
+function submitDiagQuestion(choice) {
+  return requestDiagnostic({
+    session_id: DIAG_SESSION.session_id,
+    answered: DIAG_SESSION.answered,
+    choice,
   });
 }
 
-function skipDiagQuestion() {
-  const item = DIAG_SESSION.items[DIAG_SESSION.idx];
-  DIAG_SESSION.resultsByTopic[item.topic_id] = false;
-  DIAG_SESSION.idx += 1;
-  DIAG_SESSION.selectedOption = null;
-  renderDiagnosticStep();
+function diagnosticEvidenceLabel(item) {
+  if (item.kind === "direct") {
+    const attempts = item.correct + item.incorrect;
+    const result = item.correct === attempts ? "Acierto"
+      : item.correct === 0 ? "Por practicar" : "Evidencia mixta";
+    return `Evidencia directa · ${result} · ${item.correct}/${attempts} aciertos`;
+  }
+  if (item.kind === "inferred") {
+    if (item.positive_from.length && item.negative_from.length) return "Inferencia contradictoria";
+    return item.positive_from.length ? "Inferencia favorable pendiente de confirmar" : "Posible laguna inferida";
+  }
+  return "Sin evaluar";
 }
 
-function submitDiagQuestion() {
-  if (DIAG_SESSION.selectedOption === null) return;
-  const item = DIAG_SESSION.items[DIAG_SESSION.idx];
-  const isCorrect = DIAG_SESSION.selectedOption === item.question.correct_index;
-  DIAG_SESSION.resultsByTopic[item.topic_id] = isCorrect;
-  DIAG_SESSION.idx += 1;
-  DIAG_SESSION.selectedOption = null;
-  renderDiagnosticStep();
-}
-
-async function finishDiagnostic() {
-  const sem = parseInt(document.getElementById("select-semester").value || "1", 10);
-  const res = await apiFetch("/api/diagnostic", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      results: DIAG_SESSION.resultsByTopic,
-      target_semester: sem,
-      client_backup: getLocalBackup(),
-    }),
-  });
-  const data = await res.json();
-  APP_STATE = data.state;
-  renderAll();
-
-  const bodyEl = document.getElementById("diagnostic-body");
-  const footerEl = document.getElementById("diagnostic-footer");
+function renderDiagnosticResult(bodyEl, footerEl, errorMessage, disabled) {
+  const rows = DIAG_SESSION.evidence;
+  const correct = rows.reduce((sum, item) => sum + item.correct, 0);
+  const scored = rows.reduce((sum, item) => sum + item.correct + item.incorrect, 0);
   bodyEl.innerHTML = `
-    <div style="text-align:center;padding:1.5rem 0.5rem">
-      <div style="font-size:2.4rem;margin-bottom:0.5rem">🧭</div>
-      <h3>¡Frontera de Conocimiento Calibrada!</h3>
-      <p style="color:var(--text-muted);margin-top:0.4rem">
-        Has acreditado dominio en <strong>${data.result.mastered_count} nodos base</strong> y ganaste <strong>+${data.result.xp_bonus} XP</strong>.
-        Tu cola diaria ahora apunta directamente a tu nueva frontera.
-      </p>
-    </div>
+    <h4>Resultado del piloto</h4>
+    <p>${scored ? `${correct} de ${scored} respuestas correctas` : "Sin respuestas puntuadas"} · ${DIAG_SESSION.answered - scored} omitidas</p>
+    <ul class="diagnostic-evidence">
+      ${rows.map(item => `<li><strong>${item.topic_title}</strong><br>${diagnosticEvidenceLabel(item)}</li>`).join("")}
+    </ul>
+    ${errorMessage}
   `;
   footerEl.innerHTML = `
-    <span></span>
-    <button class="btn-primary" onclick="closeDiagnosticModal()">Ir a mi Cola Personalizada →</button>
+    <button class="btn-ghost" ${disabled} onclick="startDiagnostic()">Nuevo diagnóstico</button>
+    <button class="btn-primary" onclick="closeDiagnosticModal()">Volver al panel</button>
   `;
 }
 
@@ -1049,6 +1205,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Keyboard shortcuts inside Lesson Modal
   window.addEventListener("keydown", (e) => {
+    if (!document.getElementById("diagnostic-modal").classList.contains("hidden")) {
+      if (e.key === "Escape") closeDiagnosticModal();
+      return;
+    }
     const lessonOpen = !document.getElementById("lesson-modal").classList.contains("hidden");
     if (!lessonOpen) return;
     if (e.key === "Escape") {
@@ -1056,7 +1216,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (["1", "2", "3", "4"].includes(e.key)) {
       const idx = parseInt(e.key, 10) - 1;
       selectQuestionOption(idx);
-    } else if (e.key === "Enter" && LESSON_SESSION.stepIndex >= 1) {
+    } else if (e.key === "Enter" && !e.target.closest("button")) {
       verifyCurrentQuestion();
     }
   });

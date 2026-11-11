@@ -7,12 +7,12 @@ Licenciatura en Ingeniería en Ciencia de Datos — Pontificia Universidad Cató
 COURSES = [
     {
         "id": "IC",
-        "code": "MAT1600 / IMC",
+        "code": "MAT1107",
         "name": "Introducción al Cálculo",
         "semester": 1,
         "domain": "calculo",
         "color": "#0891b2",
-        "description": "Fundamentos de números reales, desigualdades, funciones, límites, continuidad e introducción a la derivada.",
+        "description": "Inecuaciones, sucesiones y funciones reales de MAT1107, con un puente a límites de funciones, continuidad y derivada de Cálculo I.",
     },
     {
         "id": "IAG",
@@ -103,29 +103,31 @@ TOPICS = [
     # ==========================================
     {
         "id": "ic_desigualdades",
-        "title": "Desigualdades, Valor Absoluto y Cotas en ℝ",
+        "title": "Desigualdades, Valor Absoluto y Sucesiones",
         "course_id": "IC",
         "semester": 1,
         "domain": "calculo",
         "xp": 10,
         "estimated_mins": 8,
         "prereqs": [],
-        "encompasses": {},
         "generator_type": "inequality_abs",
         "theory": (
             "En $\\mathbb{R}$, el **valor absoluto** mide distancia al origen y verifica la **desigualdad triangular**:\n"
             "$$|x + y| \\le |x| + |y| \\quad \\text{y} \\quad \\big||x| - |y|\\big| \\le |x - y|$$\n"
             "Para resolver $|f(x)| < a$ con $a > 0$, usamos la equivalencia directa $-a < f(x) < a$. "
             "En desigualdades racionales como $\\frac{P(x)}{Q(x)} \\ge 0$, **nunca multipliques cruzado** por $Q(x)$ sin conocer su signo: "
-            "pasa todo a un lado, factoriza y analiza signos en una tabla de puntos críticos."
+            "pasa todo a un lado, factoriza y analiza signos en una tabla de puntos críticos.\n\n"
+            "En una sucesión como $a_n=c-k/n$, con $k>0$ y $n\\ge 1$, la distancia al límite $c$ es $|a_n-c|=k/n$. "
+            "Para asegurar que $|a_n-c|<\\varepsilon$ en todos los términos desde $N$, basta elegir un entero $N>k/\\varepsilon$. "
+            "Aquí $c$ es el supremo porque todos los términos quedan por debajo y se acercan a él tanto como se quiera."
         ),
         "ds_connection": (
             "Las normas $\\ell_1$ (Lasso, $|w|$) y $\\ell_2$ (Ridge, $w^2$) y las cotas de error de generalización "
             "en Machine Learning dependen directamente de la desigualdad triangular y de acotar expresiones con valor absoluto."
         ),
         "uc_exam_tip": (
-            "En la I1 de Introducción al Cálculo es clásico pedir el conjunto solución de $\\frac{|x-a|}{x-b} \\le c$ o hallar "
-            "supremo e ínfimo de un conjunto acotado. Verifica siempre excluir las raíces del denominador."
+            "Al hacer una tabla de signos, separa los ceros del numerador de los del denominador. "
+            "En sucesiones, comprueba si la cota se alcanza en algún término antes de llamarla máximo o mínimo."
         ),
         "worked_example": {
             "problem": "Resuelva en $\\mathbb{R}$ la inecuación $|2x - 5| < 7$ y exprese la solución como intervalo.",
@@ -149,7 +151,7 @@ TOPICS = [
                 ],
                 "correct_index": 0,
                 "hint": "Identifica los puntos críticos $x = 3$ y $x = -1$. Recuerda que el denominador $x+1$ no puede anularse.",
-                "explanation": "Los signos de $(x-3)$ y $(x+1)$ son opuestos en $[-1, 3]$. Como $x \\neq -1$ para no dividir por cero y $x=3$ anula el numerador, la solución es $(-1, 3]$.",
+                "explanation": "A la izquierda de $-1$ ambos factores son negativos. Entre $-1$ y $3$, el numerador es negativo y el denominador positivo. A la derecha de $3$ ambos son positivos. En $3$ el cociente vale cero. Error típico: incluir $-1$, donde el cociente queda indefinido. La solución es $(-1, 3]$.",
             },
             {
                 "id": "q_ic_des_2",
@@ -163,7 +165,7 @@ TOPICS = [
                 ],
                 "correct_index": 0,
                 "hint": "Evalúa en $n=1$ y analiza el comportamiento cuando $n \\to \\infty$.",
-                "explanation": "La sucesión $a_n = 2 - 3/n$ es estrictamente creciente. Su mínimo (e ínfimo) se alcanza en $n=1$ con $2 - 3 = -1$, y cuando $n \\to \\infty$, $a_n \\to 2^-$, por lo que $\\sup(A) = 2$.",
+                "explanation": "Al crecer $n$, $3/n$ decrece, así que $a_n$ aumenta desde $a_1 = -1$. Por tanto $\\inf(A)=-1$. Como $3/n$ es positivo y tiende a cero, los términos están por debajo de $2$ y se acercan arbitrariamente a él. Así $\\sup(A)=2$. Error típico: tratar $2$ como un máximo alcanzado.",
             },
         ],
     },
@@ -176,7 +178,6 @@ TOPICS = [
         "xp": 10,
         "estimated_mins": 9,
         "prereqs": ["ic_desigualdades"],
-        "encompasses": {"ic_desigualdades": 0.5},
         "generator_type": "function_composition",
         "theory": (
             "Una función $f: A \\to B$ es **inyectiva** (1-a-1) si $f(x_1) = f(x_2) \\implies x_1 = x_2$, y **sobreyectiva** "
@@ -214,20 +215,37 @@ TOPICS = [
                 ],
                 "correct_index": 0,
                 "hint": "Necesitas $x \\in \\text{Dom}(f)$ ($x \\ge 2$) y además $f(x) \\in \\text{Dom}(g)$, es decir $5 - \\sqrt{x-2} > 0$.",
-                "explanation": "Requerimos $x - 2 \\ge 0 \\implies x \\ge 2$ y además $5 - \\sqrt{x-2} > 0 \\implies \\sqrt{x-2} < 5 \\implies x - 2 < 25 \\implies x < 27$. Intersectando: $[2, 27)$.",
-            }
+                "explanation": "La raíz exige $x\\ge 2$. El logaritmo exige $5-\\sqrt{x-2}>0$. Como ambos lados de $\\sqrt{x-2}<5$ son no negativos, podemos elevar al cuadrado y obtener $x-2<25$. La intersección es $[2,27)$. Error típico: incluir $27$, donde el argumento del logaritmo vale cero.",
+            },
+            {
+                "id": "q_ic_fun_transferencia",
+                "type": "mcq",
+                "prompt": (
+                    "Un sensor funciona entre los minutos $5$ y $9$, ambos inclusive. A los $t$ minutos, "
+                    "el sistema calcula $P(t)=t^2-10t+24$ y registra $\\ln(-P(t))$ cuando tiene un valor real. "
+                    "¿En qué conjunto de tiempos se genera un registro?"
+                ),
+                "options": ["$[5,6)$", "$(4,6)$", "$[5,6]$", "$(6,9]$"],
+                "correct_index": 0,
+                "hint": "Determina dónde el argumento del logaritmo es positivo y cruza el resultado con el horario del sensor.",
+                "explanation": (
+                    "El logaritmo exige $-P(t)>0$, es decir, $P(t)<0$. Al factorizar, $P(t)=(t-4)(t-6)$. "
+                    "El producto es negativo solo cuando los factores tienen signos opuestos, en $(4,6)$. "
+                    "La intersección con $[5,9]$ da $[5,6)$. En $t=5$ el argumento vale $1$ y en $t=6$ vale cero. "
+                    "Error típico: elegir $(4,6)$ e ignorar el horario de funcionamiento."
+                ),
+            },
         ],
     },
     {
         "id": "ic_limites",
-        "title": "Límites de Funciones y Límites Notables",
+        "title": "Límites de Funciones · Puente a Cálculo I",
         "course_id": "IC",
         "semester": 1,
         "domain": "calculo",
         "xp": 12,
         "estimated_mins": 10,
         "prereqs": ["ic_funciones"],
-        "encompasses": {"ic_funciones": 0.5, "ic_desigualdades": 0.4},
         "generator_type": "limit_rational",
         "theory": (
             "Decimos que $\\lim_{x \\to a} f(x) = L$ si para todo $\\varepsilon > 0$ existe $\\delta > 0$ tal que "
@@ -242,8 +260,8 @@ TOPICS = [
             "de funciones de pérdida dependen del comportamiento asintótico y de límites notables."
         ),
         "uc_exam_tip": (
-            "En Introducción al Cálculo **no está permitido usar L'Hôpital** en las interrogaciones (se ve recién en Cálculo I). "
-            "Domina el cambio de variable $u = x - a$ para llevar límites en $x \\to a$ a límites en $u \\to 0$."
+            "En esta práctica, resuelve con álgebra y límites notables. En una simplificación de $0/0$, "
+            "comprueba dónde vale la identidad antes de tomar el límite."
         ),
         "worked_example": {
             "problem": "Calcule sin usar regla de L'Hôpital: $\\lim_{x \\to 0} \\frac{\\sqrt{1 + 3x} - 1}{x}$.",
@@ -262,24 +280,23 @@ TOPICS = [
                 "options": ["$2$", "$4$", "$1/2$", "$0$"],
                 "correct_index": 0,
                 "hint": "Usa $\\frac{\\sin(kx)}{kx} \\to 1$ o la identidad del ángulo doble $\\sin(4x) = 2\\sin(2x)\\cos(2x)$.",
-                "explanation": "Como $\\sin(4x) = 2\\sin(2x)\\cos(2x)$, el cociente se simplifica a $2\\cos(2x)$, que tiende a $2\\cos(0) = 2$ cuando $x \\to 0$.",
+                "explanation": "Usamos $\\sin(4x)=2\\sin(2x)\\cos(2x)$. Para $0<|x|<\\pi/2$, $\\sin(2x)\\ne 0$ y el cociente es $2\\cos(2x)$. Por continuidad del coseno, el límite vale $2\\cos(0)=2$. Error típico: sustituir directamente en el cociente y tomar $0/0$ como un resultado.",
             }
         ],
     },
     {
         "id": "ic_continuidad_derivada",
-        "title": "Continuidad, TVI e Introducción a la Derivada",
+        "title": "Continuidad y Derivada · Puente a Cálculo I",
         "course_id": "IC",
         "semester": 1,
         "domain": "calculo",
         "xp": 12,
         "estimated_mins": 10,
         "prereqs": ["ic_limites"],
-        "encompasses": {"ic_limites": 0.75, "ic_funciones": 0.4},
         "generator_type": "continuity_param",
         "theory": (
             "$f$ es **continua en $a$** si $\\lim_{x \\to a^-} f(x) = \\lim_{x \\to a^+} f(x) = f(a)$.\n"
-            "- **Teorema del Valor Intermedio (TVI / Bolzano)**: Si $f$ es continua en $[a,b]$ y $f(a)\\cdot f(b) < 0$, existe al menos una raíz $c \\in (a,b)$ tal que $f(c) = 0$.\n"
+            "- **Teorema de Bolzano** (caso del teorema del valor intermedio): Si $f$ es continua en $[a,b]$ y $f(a)\\cdot f(b) < 0$, existe al menos una raíz $c \\in (a,b)$ tal que $f(c) = 0$.\n"
             "- **Derivada por definición**:\n"
             "$$f'(a) = \\lim_{h \\to 0} \\frac{f(a+h) - f(a)}{h} = \\lim_{x \\to a} \\frac{f(x) - f(a)}{x - a}$$\n"
             "Toda función derivable en $a$ es continua en $a$, pero **el recíproco es falso** (ej. $f(x) = |x|$ en $x = 0$)."
@@ -309,7 +326,7 @@ TOPICS = [
                 "options": ["$(1, 2)$", "$(0, 1)$", "$(-1, 0)$", "$(2, 3)$"],
                 "correct_index": 0,
                 "hint": "Evalúa el signo de $f$ en los extremos de cada intervalo.",
-                "explanation": "Como $f$ es polinomial (continua en $\\mathbb{R}$), $f(1) = 1 + 1 - 3 = -1 < 0$ y $f(2) = 8 + 2 - 3 = 7 > 0$. Al cambiar de signo, Bolzano garantiza una raíz en $(1,2)$.",
+                "explanation": "Como $f$ es polinomial, es continua en $[1,2]$. Calculamos $f(1)=-1<0$ y $f(2)=7>0$. Con continuidad y signos opuestos, Bolzano garantiza una raíz en $(1,2)$. Error típico: invocar el teorema solo por el cambio de signo, sin verificar continuidad.",
             }
         ],
     },
@@ -326,7 +343,6 @@ TOPICS = [
         "xp": 10,
         "estimated_mins": 8,
         "prereqs": [],
-        "encompasses": {},
         "generator_type": "logic_truth",
         "theory": (
             "La implicancia $p \\implies q$ es lógicamente equivalente a:\n"
@@ -378,7 +394,6 @@ TOPICS = [
         "xp": 12,
         "estimated_mins": 10,
         "prereqs": ["iag_logica_conjuntos"],
-        "encompasses": {"iag_logica_conjuntos": 0.5},
         "generator_type": "summation_telescopic",
         "theory": (
             "**Sumatorias fundamentales:**\n"
@@ -424,7 +439,6 @@ TOPICS = [
         "xp": 12,
         "estimated_mins": 10,
         "prereqs": ["iag_logica_conjuntos"],
-        "encompasses": {"iag_logica_conjuntos": 0.4},
         "generator_type": "vectors_dot_proj",
         "theory": (
             "Dados $u, v \\in \\mathbb{R}^n$, su **producto punto** es $u \\cdot v = \\sum_{i=1}^n u_i v_i = \\|u\\|\\,\\|v\\|\\cos\\theta$.\n"
@@ -471,7 +485,6 @@ TOPICS = [
         "xp": 11,
         "estimated_mins": 9,
         "prereqs": ["iag_induccion_sumatorias"],
-        "encompasses": {"iag_induccion_sumatorias": 0.5},
         "generator_type": "complex_modulus",
         "theory": (
             "Todo complejo $z = a + bi$ se escribe en **forma polar/exponencial** como $z = r e^{i\\theta} = r(\\cos\\theta + i\\sin\\theta)$ "
@@ -522,7 +535,6 @@ TOPICS = [
         "xp": 10,
         "estimated_mins": 8,
         "prereqs": ["iag_induccion_sumatorias"],
-        "encompasses": {"iag_induccion_sumatorias": 0.4},
         "generator_type": "descriptive_stats",
         "theory": (
             "**Conteo fundamental**:\n"
@@ -573,7 +585,6 @@ TOPICS = [
         "xp": 13,
         "estimated_mins": 10,
         "prereqs": ["ic_continuidad_derivada"],
-        "encompasses": {"ic_continuidad_derivada": 0.8, "ic_funciones": 0.5},
         "generator_type": "derivative_chain",
         "theory": (
             "**Regla de la Cadena**: Si $g$ es derivable en $x$ y $f$ es derivable en $g(x)$, entonces:\n"
@@ -619,7 +630,6 @@ TOPICS = [
         "xp": 14,
         "estimated_mins": 11,
         "prereqs": ["c1_derivadas_cadena"],
-        "encompasses": {"c1_derivadas_cadena": 0.75, "ic_desigualdades": 0.4},
         "generator_type": "taylor_opt_1d",
         "theory": (
             "- **Teorema del Valor Medio (TVM)**: Si $f$ es continua en $[a,b]$ y derivable en $(a,b)$, existe $c \\in (a,b)$ tal que $f(b) - f(a) = f'(c)(b-a)$.\n"
@@ -663,7 +673,6 @@ TOPICS = [
         "xp": 14,
         "estimated_mins": 12,
         "prereqs": ["c1_tvm_optimizacion_taylor"],
-        "encompasses": {"c1_tvm_optimizacion_taylor": 0.7, "c1_derivadas_cadena": 0.6, "iag_induccion_sumatorias": 0.4},
         "generator_type": "definite_integral",
         "theory": (
             "**Teorema Fundamental del Cálculo (TFC Parte 1 con Regla de Leibniz)**:\n"
@@ -713,7 +722,6 @@ TOPICS = [
         "xp": 12,
         "estimated_mins": 10,
         "prereqs": ["iag_vectores_geometria"],
-        "encompasses": {"iag_vectores_geometria": 0.7},
         "generator_type": "matrix_rank_system",
         "theory": (
             "Un sistema lineal $Ax = b$ ($A \\in \\mathbb{R}^{m \\times n}$) es **compatible** si y solo si $\\text{rango}(A) = \\text{rango}([A \\mid b])$.\n"
@@ -759,7 +767,6 @@ TOPICS = [
         "xp": 13,
         "estimated_mins": 10,
         "prereqs": ["al_sistemas_rango"],
-        "encompasses": {"al_sistemas_rango": 0.8},
         "generator_type": "rank_nullity",
         "theory": (
             "Para toda matriz $A \\in \\mathbb{R}^{m \\times n}$ (o transformación lineal $T: \\mathbb{R}^n \\to \\mathbb{R}^m$):\n"
@@ -805,7 +812,6 @@ TOPICS = [
         "xp": 15,
         "estimated_mins": 12,
         "prereqs": ["al_espacios_nucleo_imagen"],
-        "encompasses": {"al_espacios_nucleo_imagen": 0.8, "iag_vectores_geometria": 0.7},
         "generator_type": "least_squares_1d",
         "theory": (
             "Cuando el sistema $Ax = b$ es sobredeterminado e incompatible ($b \\notin \\text{Col}(A)$), buscamos $\\hat{x}$ que minimice el error cuadrático $\\|Ax - b\\|_2^2$.\n"
@@ -856,7 +862,6 @@ TOPICS = [
         "xp": 15,
         "estimated_mins": 12,
         "prereqs": ["al_espacios_nucleo_imagen", "iag_complejos_polinomios"],
-        "encompasses": {"al_espacios_nucleo_imagen": 0.75, "iag_complejos_polinomios": 0.5},
         "generator_type": "eigenvalues_2x2",
         "theory": (
             "Un escalar $\\lambda$ es **valor propio (eigenvalue)** de $A \\in \\mathbb{R}^{n \\times n}$ si existe $v \\neq 0$ tal que $Av = \\lambda v$, "
@@ -907,7 +912,6 @@ TOPICS = [
         "xp": 15,
         "estimated_mins": 12,
         "prereqs": ["c1_tvm_optimizacion_taylor", "al_valores_propios"],
-        "encompasses": {"c1_tvm_optimizacion_taylor": 0.75, "al_valores_propios": 0.5, "iag_vectores_geometria": 0.5},
         "generator_type": "gradient_eval",
         "theory": (
             "Para $f: \\mathbb{R}^n \\to \\mathbb{R}$ diferenciable:\n"
@@ -959,7 +963,6 @@ TOPICS = [
         "xp": 15,
         "estimated_mins": 12,
         "prereqs": ["ccd_gradiente_hessiana", "c1_integracion_tfc"],
-        "encompasses": {"ccd_gradiente_hessiana": 0.8, "c1_integracion_tfc": 0.6},
         "generator_type": "lagrange_linear_sphere",
         "theory": (
             "**Multiplicadores de Lagrange**: Para optimizar $f(x)$ sujeto a la restricción $g(x) = c$, los extremos cumplen que los gradientes son colineales:\n"
@@ -1008,7 +1011,6 @@ TOPICS = [
         "xp": 16,
         "estimated_mins": 13,
         "prereqs": ["al_valores_propios", "al_ortogonalidad_minimos_cuadrados"],
-        "encompasses": {"al_valores_propios": 0.85, "al_ortogonalidad_minimos_cuadrados": 0.75},
         "generator_type": "svd_singular_values",
         "theory": (
             "- Una matriz simétrica $S \\in \\mathbb{R}^{n \\times n}$ es ** Semidefinida Positiva** ($S \\succeq 0$) si $x^T S x \\ge 0$ para todo $x$, lo cual equivale a que todos sus valores propios cumplan $\\lambda_i \\ge 0$. Toda matriz de la forma $A^T A$ es siempre $S \\succeq 0$.\n"
@@ -1059,7 +1061,6 @@ TOPICS = [
         "xp": 13,
         "estimated_mins": 10,
         "prereqs": ["iag_induccion_sumatorias", "ic_limites"],
-        "encompasses": {"iag_induccion_sumatorias": 0.65, "ic_limites": 0.45},
         "generator_type": "graph_handshaking",
         "theory": (
             "- **Orden Asintótico**: $f(n) = O(g(n))$ si existen $C > 0, n_0$ tales que $0 \\le f(n) \\le C g(n)$ para todo $n \\ge n_0$.\n"
@@ -1116,7 +1117,6 @@ TOPICS = [
         "xp": 16,
         "estimated_mins": 13,
         "prereqs": ["ccd_lagrange_multivariable", "alam_svd_pca"],
-        "encompasses": {"ccd_lagrange_multivariable": 0.8, "alam_svd_pca": 0.7, "ccd_gradiente_hessiana": 0.85},
         "generator_type": "gradient_descent_step",
         "theory": (
             "Una función dos veces diferenciable $f: \\mathbb{R}^n \\to \\mathbb{R}$ es **convexa** si y solo si su matriz Hessiana es semidefinida positiva en todo punto: $\\nabla^2 f(x) \\succeq 0$.\n"
@@ -1170,7 +1170,6 @@ TOPICS = [
         "xp": 15,
         "estimated_mins": 12,
         "prereqs": ["tme_combinatoria_descriptiva", "c1_integracion_tfc"],
-        "encompasses": {"tme_combinatoria_descriptiva": 0.8, "c1_integracion_tfc": 0.65},
         "generator_type": "bayes_theorem",
         "theory": (
             "- **Teorema de Bayes** (con partición $B_1, \\dots, B_k$):\n"
@@ -1216,7 +1215,6 @@ TOPICS = [
         "xp": 16,
         "estimated_mins": 13,
         "prereqs": ["mp_bayes_variables_aleatorias", "alam_svd_pca"],
-        "encompasses": {"mp_bayes_variables_aleatorias": 0.85, "alam_svd_pca": 0.6},
         "generator_type": "clt_sample_mean",
         "theory": (
             "- Para un vector aleatorio $X \\in \\mathbb{R}^d$ con matriz de covarianza $\\Sigma_X$ y una transformación afín $Y = A X + b$, se cumple:\n"

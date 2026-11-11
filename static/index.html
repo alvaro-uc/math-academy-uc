@@ -66,8 +66,9 @@
         </div>
       </div>
       <div class="total-xp-badge" id="total-xp-badge">0 XP Total</div>
+      <span class="badge badge-lesson hidden" id="demo-profile-label" aria-live="polite"></span>
       <button class="btn-outline btn-sm" id="btn-open-diagnostic" title="Calibrar tu frontera actual con un test rápido">
-        Diagnóstico Inicial
+        Diagnóstico del piloto
       </button>
       <button class="btn-ghost btn-sm" id="btn-logout" title="Bloquear sesión en esta pestaña">
         🔒 Bloquear
@@ -101,20 +102,22 @@
             </div>
           </div>
 
+          <div id="study-cards" class="task-queue-list"></div>
+          <p id="study-status" class="study-status" role="status"></p>
           <div id="task-queue-list" class="task-queue-list"></div>
 
           <!-- Quick Calibration Presets & Backup Sync -->
           <div class="presets-card">
             <div class="presets-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
-              <span>Perfiles Rápidos de Simulación (1 clic) y Respaldo:</span>
+              <span>Demostración y respaldo</span>
               <span id="storage-backend-badge" style="font-size:0.72rem;color:var(--text-muted);font-weight:500;">💾 Almacenamiento Local</span>
             </div>
             <div class="presets-actions">
               <button class="btn-ghost btn-xs" data-preset="mid_sem1">
-                📍 Mitad Semestre 1 (I1/I2 Intro Cálculo + Álgebra)
+                Demo · Mitad del semestre 1
               </button>
               <button class="btn-ghost btn-xs" data-preset="sem2_ready">
-                🚀 Anticipar Semestre 2 (Cálculo I + Álgebra Lineal CD)
+                Demo · Inicio del semestre 2
               </button>
               <button class="btn-ghost btn-xs" data-preset="reset">
                 🔄 Reiniciar desde Cero
@@ -145,23 +148,19 @@
               </div>
               <div class="kpi-box">
                 <div class="kpi-val" id="kpi-reviews">0</div>
-                <div class="kpi-label">Repasos FIRe</div>
+                <div class="kpi-label">Temas por repasar</div>
               </div>
             </div>
           </div>
 
           <div class="stat-card">
-            <h3>Progreso por Ramo UC</h3>
+            <h3>Progreso por ramo UC</h3>
             <div id="sidebar-courses-progress" class="courses-mini-list"></div>
           </div>
 
           <div class="stat-card">
-            <h3>Cómo funciona tu Motor FIRe</h3>
-            <ul class="fire-explainer">
-              <li><strong>Frontera de Conocimiento:</strong> Solo desbloqueas un tema cuando dominas ($\ge 75\%$) sus prerrequisitos directos.</li>
-              <li><strong>Repetición Implícita Fraccionaria (FIRe):</strong> Practicar <em>Regla de la Cadena</em> o <em>Mínimos Cuadrados</em> propaga crédito de memoria hacia <em>Derivadas</em>, <em>Límites</em> y <em>Vectores</em> automáticamente.</li>
-              <li><strong>Generador Infinito:</strong> Cada sesión combina preguntas conceptuales tipo Interrogación UC con problemas paramétricos nuevos.</li>
-            </ul>
+            <h3>Actividad de los últimos 7 días</h3>
+            <div id="activity-7d"></div>
           </div>
         </div>
       </div>
@@ -212,17 +211,18 @@
 
   <!-- MODAL: SESIÓN DE ENTRENAMIENTO (MICRO-LECCIÓN + PRÁCTICA ADAPTATIVA) -->
   <div id="lesson-modal" class="modal-backdrop hidden" aria-hidden="true">
-    <div class="modal-window lesson-window">
+    <div class="modal-window lesson-window" role="dialog" aria-modal="true" aria-labelledby="lesson-title">
       <div class="modal-topbar">
         <div>
           <span class="modal-course-tag" id="lesson-course-tag">MAT1600</span>
-          <h3 id="lesson-title">Título del Tópico</h3>
+          <h3 id="lesson-title" tabindex="-1">Título del Tópico</h3>
         </div>
         <div class="lesson-stepper" id="lesson-stepper"></div>
         <button class="btn-close" id="btn-close-lesson" title="Cerrar (Esc)">✕</button>
       </div>
 
       <div class="modal-body" id="lesson-body"></div>
+      <p id="lesson-status" class="study-status modal-study-status" role="status"></p>
 
       <div class="modal-footer" id="lesson-footer"></div>
     </div>
@@ -233,8 +233,8 @@
     <div class="modal-window diagnostic-window">
       <div class="modal-topbar">
         <div>
-          <span class="modal-course-tag">Calibración Adaptativa UC</span>
-          <h3>Diagnóstico de Frontera de Conocimiento</h3>
+          <span class="modal-course-tag">MAT1107 y puente a Cálculo I</span>
+          <h3>Diagnóstico adaptativo</h3>
         </div>
         <button class="btn-close" id="btn-close-diagnostic">✕</button>
       </div>
