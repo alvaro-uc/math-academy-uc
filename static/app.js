@@ -720,7 +720,7 @@ function renderLessonSummary() {
       <div style="margin-top:1rem;padding:0.9rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
         <strong style="color:#15803d">⚡ Propagación FIRe (Repetición Implícita Fraccionaria):</strong>
         <p style="font-size:0.83rem;color:#166534;margin-top:0.2rem">
-          Al dominar este tópico avanzado, el motor extendió automáticamente el intervalo de memoria de tus prerrequisitos:
+          Al aprobar este intento, el motor extendió el intervalo de repaso de tus prerrequisitos:
         </p>
         <ul style="padding-left:1.2rem;margin-top:0.4rem;font-size:0.83rem;color:#14532d">
           ${res.implicit_boosted
@@ -740,7 +740,7 @@ function renderLessonSummary() {
     <div style="text-align:center;padding:1.2rem 0.5rem">
       <div style="font-size:2.4rem;margin-bottom:0.4rem">${res && res.passed ? "🎯" : "🔁"}</div>
       <h3 style="font-size:1.3rem">${
-        res && res.passed ? "¡Sesión Dominada!" : "Sesión Registrada — Reforcemos este nodo"
+        res && res.passed ? "¡Intento aprobado!" : "Intento registrado · Bajo el 65 %"
       }</h3>
       <p style="color:var(--text-muted);margin-top:0.3rem">
         Obtuviste <strong>${LESSON_SESSION.correctCount} de ${totalQ}</strong> respuestas correctas (${Math.round(
@@ -757,10 +757,12 @@ function renderLessonSummary() {
           <div class="kpi-val">${res ? Math.round(res.new_mastery * 100) : 0}%</div>
           <div class="kpi-label">Maestría del Tópico</div>
         </div>
-        <div class="kpi-box" style="min-width:130px">
-          <div class="kpi-val">${res ? res.new_stability_days : 2} d</div>
-          <div class="kpi-label">Próximo Repaso FIRe</div>
-        </div>
+        ${res && res.review_scheduled ? `
+          <div class="kpi-box" style="min-width:130px">
+            <div class="kpi-val">${res.new_stability_days} d</div>
+            <div class="kpi-label">Próximo Repaso FIRe</div>
+          </div>
+        ` : ""}
       </div>
     </div>
     ${implicitHtml}

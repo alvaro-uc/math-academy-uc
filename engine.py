@@ -641,8 +641,8 @@ def get_topic_lesson_payload(topic_id):
 
 def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
     """
-    Actualiza la maestría del nodo practicado y propaga crédito de repetición implícita
-    fraccionaria (FIRe) hacia los nodos prerrequisito en el grafo.
+    Registra el intento y exige una aprobación para aumentar la maestría o dar
+    crédito FIRe. Un fallo acorta el repaso de un tópico ya aprendido.
     """
     init_db()
     if topic_id not in TOPICS_BY_ID:
@@ -667,57 +667,62 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
         ).fetchone()
     )
     old_mastery = float(st["mastery"])
-    old_stability = max(1.5, float(st["stability_days"]))
+    old_stability = min(90.0, float(st["stability_days"]))
     reps = int(st["repetitions"])
+    was_mastered = old_mastery >= 0.75
+    review_scheduled = passed or was_mastered
+    mastery_evidence = None
+    new_mastery = old_mastery
+    new_stability = float(st["stability_days"])
 
     if passed:
-        new_mastery = min(1.0, max(old_mastery, 0.75 + 0.25 * score_ratio))
+        mastery_evidence = 0.75 + 0.25 * score_ratio
+        new_mastery = max(old_mastery, mastery_evidence)
         growth_factor = 1.8 + 0.9 * score_ratio
-        new_stability = min(90.0, old_stability * growth_factor if reps > 0 else 4.0)
-        new_reps = reps + 1
-    else:
-        if old_mastery >= 0.75 or task_type == "review":
-            # Era un tópico ya dominado / en repaso espaciado: registramos el repaso hoy,
-            # acortamos su intervalo para reforzar pronto, sin bloquear los temas posteriores.
-            new_mastery = max(0.75, round(old_mastery - 0.05, 2))
-            new_stability = max(1.0, round(old_stability * 0.55, 1))
-            new_reps = reps + 1
-        else:
-            # Lección nueva en progreso: acumula maestría progresivamente con cada práctica
-            step_gain = 0.25 + 0.35 * score_ratio
-            new_mastery = min(1.0, max(0.35, round(old_mastery + step_gain, 2)))
-            new_stability = 2.5 if new_mastery >= 0.75 else 2.0
-            new_reps = reps + 1
+        new_stability = 4.0
+        if reps > 0 or was_mastered:
+            new_stability = min(90.0, max(1.5, old_stability) * growth_factor)
+    elif was_mastered:
+        new_stability = max(1.0, round(old_stability * 0.55, 1))
 
-    next_review_ts = now_ts + new_stability * 86400.0
-    cur.execute(
-        """
-        UPDATE topic_state
-        SET mastery = ?,
-            stability_days = ?,
-            repetitions = ?,
-            last_practiced_ts = ?,
-            next_review_ts = ?,
-            total_attempts = total_attempts + ?,
-            correct_attempts = correct_attempts + ?
-        WHERE topic_id = ?
-        """,
-        (
-            new_mastery,
-            new_stability,
-            new_reps,
-            now_ts,
-            next_review_ts,
-            total_count,
-            correct_count,
-            topic_id,
-        ),
-    )
+    if review_scheduled:
+        cur.execute(
+            """
+            UPDATE topic_state
+            SET mastery = CASE WHEN mastery < ? THEN ? ELSE mastery END,
+                stability_days = ?,
+                repetitions = repetitions + 1,
+                last_practiced_ts = ?,
+                next_review_ts = ?,
+                total_attempts = total_attempts + ?,
+                correct_attempts = correct_attempts + ?
+            WHERE topic_id = ?
+            """,
+            (
+                mastery_evidence,
+                mastery_evidence,
+                new_stability,
+                now_ts,
+                now_ts + new_stability * 86400.0,
+                total_count,
+                correct_count,
+                topic_id,
+            ),
+        )
+    else:
+        cur.execute(
+            """
+            UPDATE topic_state
+            SET total_attempts = total_attempts + ?,
+                correct_attempts = correct_attempts + ?
+            WHERE topic_id = ?
+            """,
+            (total_count, correct_count, topic_id),
+        )
 
     # Propagación FIRe (Fractional Implicit Repetition) a sub-tópicos abarcados
     implicit_boosted = []
-    if passed or score_ratio >= 0.33:
-        eff_ratio = score_ratio if passed else score_ratio * 0.5
+    if passed:
         implicit_weights = get_Transitive_Encompassed(topic_id)
         for sub_id, weight in implicit_weights.items():
             sub_row = cur.execute(
@@ -728,8 +733,8 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
             sub_m = float(sub_row["mastery"])
             sub_s = max(1.5, float(sub_row["stability_days"]))
             if sub_m > 0.0:
-                boosted_s = min(90.0, sub_s * (1.0 + 0.55 * weight * eff_ratio))
-                boosted_m = min(1.0, max(sub_m, sub_m + 0.12 * weight * eff_ratio))
+                boosted_s = min(90.0, sub_s * (1.0 + 0.55 * weight * score_ratio))
+                boosted_m = min(1.0, max(sub_m, sub_m + 0.12 * weight * score_ratio))
                 sub_next_ts = now_ts + boosted_s * 86400.0
                 cur.execute(
                     """
@@ -794,11 +799,12 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
     conn.close()
 
     return {
-        "passed": passed or new_mastery >= 0.75,
-        "score_ratio": round(score_ratio, 2),
+        "passed": passed,
+        "score_ratio": score_ratio,
         "xp_earned": xp_earned,
         "new_mastery": round(new_mastery, 2),
         "new_stability_days": round(new_stability, 1),
+        "review_scheduled": review_scheduled,
         "implicit_boosted": implicit_boosted,
     }
 
