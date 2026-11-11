@@ -990,7 +990,7 @@ def _lesson_transition(cur, progress, body, now):
     if lesson is None or lesson["id"] != body.get("session_id"):
         raise ValueError("La sesión cambió. Vuelve a abrirla desde el panel.")
     writes = []
-    if action == "advance" and study.advance_lesson(lesson, body):
+    if action in ("advance", "hint") and study.advance_lesson(progress, lesson, body, now.timestamp()):
         topic = lesson["topic"]
         topic_id = topic["id"]
         task_type = lesson["task_type"]
@@ -1033,8 +1033,11 @@ def _quiz_transition(cur, progress, body, now):
         overview["status"] == "in_progress" and body.get("session_id") == quiz["id"]
         and body.get("answered") == overview["answered"]
     ):
-        question = study.quiz_question(quiz["variants"][overview["answered"]])
-        quiz["answers"].append(study.valid_choice(body.get("choice"), question))
+        variant = quiz["variants"][overview["answered"]]
+        study.confirm_answer(
+            progress, quiz, study.quiz_question(variant), body.get("choice"), now.timestamp(),
+            topic_id=variant["topic_id"], task_type="quiz", hint_used=False,
+        )
         if len(quiz["answers"]) == overview["total"]:
             results = study.quiz_results(quiz)
             errors = {
@@ -1050,7 +1053,9 @@ def advance_study(body):
     """Guarda cada paso. El cierre y los XP se confirman en la misma transacción."""
     kind = body.get("kind")
     action = body.get("action")
-    if kind not in ("lesson", "quiz") or action not in ("open", "resume", "advance"):
+    if kind not in ("lesson", "quiz") or (
+        action not in ("open", "resume", "advance") and (kind, action) != ("lesson", "hint")
+    ):
         raise ValueError("Acción de estudio desconocida.")
     init_db()
     conn = get_conn()
@@ -1300,7 +1305,10 @@ def import_backup_payload(payload, *, expected_revisions=None):
     study_backup = payload.get("study") or {}
     study_revision = float(study_backup.get("revision", 0))
     progress = study_backup.get("progress", study.empty_state())
-    if not isinstance(progress, dict) or set(progress) != set(study.empty_state()):
+    if not isinstance(progress, dict):
+        raise ValueError("El respaldo de las sesiones de estudio no es válido.")
+    progress = {"first_attempts": [], **progress}
+    if progress.keys() != study.empty_state().keys() or not isinstance(progress["first_attempts"], list):
         raise ValueError("El respaldo de las sesiones de estudio no es válido.")
     init_db()
     conn = get_conn()

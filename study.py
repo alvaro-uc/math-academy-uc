@@ -16,7 +16,10 @@ MIN_QUIZ_TOPICS = 2
 
 
 def empty_state():
-    return {"lessons": {}, "last_lesson": None, "quiz": None, "seen": [], "quiz_reviews": {}}
+    return {
+        "lessons": {}, "last_lesson": None, "quiz": None, "seen": [], "quiz_reviews": {},
+        "first_attempts": [],
+    }
 
 
 def prompt_key(prompt):
@@ -58,6 +61,7 @@ def new_lesson(topic, task_type):
         "task_type": task_type,
         "step": int(task_type in DIRECT_TASKS),
         "answers": [],
+        "hint_used": False,
         "result": None,
     }
 
@@ -73,7 +77,7 @@ def lesson_overview(session, slot):
     }
 
 
-def advance_lesson(session, body):
+def advance_lesson(progress, session, body, now_ts):
     """Devuelve si corresponde registrar el resultado tras la última corrección."""
     if (session["result"] is not None or session["id"] != body.get("session_id")
             or session["step"] != body.get("step") or len(session["answers"]) != body.get("answered")):
@@ -81,16 +85,32 @@ def advance_lesson(session, body):
     step = session["step"]
     answers = session["answers"]
     questions = session["topic"]["questions"]
+    tracks_hint = body.get("tracks_hint") is True
+    waiting_for_answer = 0 < step <= len(questions) and len(answers) == step - 1
+    if body["action"] == "hint":
+        if waiting_for_answer and session["task_type"] not in DIRECT_TASKS:
+            session["hint_used"] = True
+        return False
     if "choice" in body:
-        if 0 < step <= len(questions) and len(answers) == step - 1:
-            question = questions[step - 1]
-            answers.append(valid_choice(body["choice"], question))
+        if waiting_for_answer:
+            task_type = session["task_type"]
+            hint_used = session.get("hint_used")
+            if task_type in DIRECT_TASKS:
+                hint_used = False
+            elif hint_used is False and not tracks_hint:
+                # Un cliente anterior podía mostrar la pista sin avisar al servidor.
+                hint_used = None
+            confirm_answer(
+                progress, session, questions[step - 1], body["choice"], now_ts,
+                topic_id=session["topic"]["id"], task_type=task_type, hint_used=hint_used,
+            )
         return False
     if step != len(answers):
         raise ValueError("Confirma la respuesta para continuar.")
     if step == len(questions):
         return True
     session["step"] += 1
+    session["hint_used"] = False if tracks_hint else None
     return False
 
 
@@ -98,6 +118,22 @@ def valid_choice(choice, question):
     if type(choice) is not int or not 0 <= choice < len(question["options"]):
         raise ValueError("Selecciona una alternativa válida.")
     return choice
+
+
+def confirm_answer(progress, session, question, choice, now_ts, *, topic_id, task_type, hint_used):
+    choice = valid_choice(choice, question)
+    question_index = len(session["answers"])
+    session["answers"].append(choice)
+    progress.setdefault("first_attempts", []).append({
+        "session_id": session["id"],
+        "topic_id": topic_id,
+        "task_type": task_type,
+        "question_index": question_index,
+        "prompt_key": prompt_key(question["prompt"]),
+        "correct": choice == question["correct_index"],
+        "hint_used": hint_used,
+        "answered_ts": now_ts,
+    })
 
 
 def quiz_question(variant):

@@ -160,15 +160,25 @@ La prioridad es hacer útil el piloto en semanas reales de clases e interrogacio
 | **12. Calibración de repaso y FIRe** | Alternar bloques comparables con FIRe activo y con `FIRE_ENABLED=0`, partiendo de respaldos equivalentes. Registrar los minutos de todos los repasos y los aciertos de primer intento sin ayuda en variantes inéditas a 7 y 14 días. Incluir número de respuestas y práctica intermedia. Ampliar las aristas auditadas cuando los datos muestren una carga de repaso menor y un acierto diferido comparable. | 1 sesión de preparación, controles a 7 y 14 días y 1 de análisis |
 | **13. Verificación de versiones y recuperación de datos** | Automatizar las pruebas actuales por commit y comprobar en una base aislada el mismo backend que usa producción. Cubrir la apertura del panel, la actualización de una sesión, la concurrencia y un ciclo de exportación y restauración. Dejar trazable el SHA de producción y probar la lectura de un respaldo anterior con la nueva versión. | 2 de 45–60 min, en paralelo con el módulo 7 si aparece un problema de despliegue |
 
+## Estado del módulo 7
+
+**Primer corte al 11 de noviembre de 2026.** Lecciones, repasos y quizzes guardan en `study.progress.first_attempts` una medición de la primera respuesta confirmada de cada pregunta de una sesión. La medición contiene el tema, el tipo de tarea, el índice, la huella del enunciado, el acierto, el uso de pista y la fecha de confirmación. El registro se escribe junto con la respuesta, aparece en el respaldo y se conserva al iniciar otra sesión. La fecha identifica práctica observada por pregunta. La maestría estimada y la fecha de repaso se derivan de las reglas de cierre, el avance cuenta respuestas confirmadas y los XP registran actividad.
+
+En una lección guiada, el servidor registra la solicitud de pista antes de mostrarla. Al retomar la pregunta se recupera ese dato. Los repasos directos y el quiz registran `hint_used: false` porque sus preguntas carecen de pistas. Un valor `null` indica que el uso de pista es desconocido. El tipo de tarea permite distinguir una lección con ejemplo resuelto de una recuperación directa. Los respaldos anteriores conservan sus respuestas y resultados y sus preguntas ya contestadas quedan sin medición de primer intento.
+
+**Evidencia.** Pasaron 23 pruebas con `python -m unittest discover -s tests -v` y pasó `node --check static/app.js`. La API WSGI autenticada se probó con SQLite temporal, reloj controlado y semilla 1107. Se verificaron reanudación tras una pausa, primer envío simultáneo, reintento con otra alternativa, respaldo nuevo y antiguo, persistencia al abrir otra sesión y reversión de la última respuesta del quiz si falla el cierre. Una comprobación con DOM simulado verificó la selección de alternativa al abrir la pista, su reaparición al retomar la pregunta y el envío de la respuesta. Chrome sin interfaz se cerró antes de ejecutar la prueba. El uso de cuota no se midió.
+
 ## Próxima sesión
 
-Arrancar por el módulo 7 con un corte pequeño. Una primera sesión debe producir una medición de primer intento que sobreviva una recarga y aparezca en un respaldo. La interfaz de seguimiento y el experimento de retención pueden venir después. Si la próxima interrogación ya tiene fecha y temario, adelantar el módulo 9 para ese bloque.
+Completar el segundo corte del módulo 7 con duración activa, familia de ejercicio y seguimiento por tema. Usar la fecha de confirmación para mostrar la última práctica observada. Si la próxima interrogación ya tiene fecha y temario, adelantar el módulo 9 para ese bloque.
 
 ```text
 Lee AGENTS.md y las secciones Próxima etapa y Próxima sesión de
-docs/plan-math-academy-uc.md. Ejecuta el primer corte del módulo 7.
-Revisa qué guarda study.py para una respuesta y cómo engine.py guarda
-y restaura la sesión. Añade la medición mínima del primer intento y
-verifica recarga, reintento y respaldo en SQLite temporal. Registra el
-resultado y la siguiente entrega en el plan.
+docs/plan-math-academy-uc.md y retoma desde Estado del módulo 7.
+Sobre el historial de primeros intentos, añade duración activa que
+excluya las pausas y familias de ejercicio identificables. Resume por
+tema los aciertos sin ayuda, los conteos, el tiempo y la última práctica.
+Prepara controles reproducibles a 7 y 14 días y marca los datos
+históricos ausentes. Verifica pausa, recarga, doble envío y restauración
+en SQLite temporal. Registra la evidencia y la siguiente acción.
 ```

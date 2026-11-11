@@ -552,13 +552,19 @@ async function requestStudy(payload, showModal = false) {
       QUIZ_SESSION = { ...data.session, selectedOption: null };
       LESSON_SESSION = null;
     } else {
-      const { topic, task_type, answers, step, result, slot, id } = data.session;
+      const { topic, task_type, answers, step, result, slot, id, hint_used } = data.session;
+      const answeredCurrent = step > 0 && step <= answers.length;
+      let selectedOption = answeredCurrent ? answers[step - 1] : null;
+      if (!answeredCurrent && payload.action === "hint" && LESSON_SESSION?.id === id && LESSON_SESSION.stepIndex === step) {
+        selectedOption = LESSON_SESSION.selectedOption;
+      }
       LESSON_SESSION = {
         topic, id, slot, answers,
         directRetrieval: DIRECT_TASKS.includes(task_type),
         stepIndex: step,
-        selectedOption: step > 0 && step <= answers.length ? answers[step - 1] : null,
-        answeredCurrent: step > 0 && step <= answers.length,
+        selectedOption,
+        answeredCurrent,
+        hintUsed: hint_used === true,
         correctCount: answers.filter((answer, index) => answer === topic.questions[index].correct_index).length,
         completionResponse: result,
       };
@@ -571,7 +577,8 @@ async function requestStudy(payload, showModal = false) {
     if (!modal.classList.contains("hidden")) {
       if (QUIZ_SESSION) renderQuiz();
       else renderLessonStep();
-      document.getElementById("lesson-title").focus();
+      const hintButton = payload.action === "hint" && document.getElementById("btn-lesson-hint");
+      (hintButton || document.getElementById("lesson-title")).focus();
     }
   } catch (error) {
     if (error.message === "Unauthorized") return;
@@ -728,8 +735,9 @@ function renderLessonStep() {
   if (stepIndex >= 1 && stepIndex <= totalQuestions) {
     const qIdx = stepIndex - 1;
     const q = topic.questions[qIdx];
-    const { selectedOption, answeredCurrent } = LESSON_SESSION;
+    const { selectedOption, answeredCurrent, hintUsed } = LESSON_SESSION;
     const correct = selectedOption === q.correct_index;
+    const hintVisible = hintUsed && !answeredCurrent;
 
     bodyEl.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.55rem">
@@ -738,14 +746,15 @@ function renderLessonStep() {
       q.is_parametric ? "Generador Paramétrico Dinámico" : "Problema Tipo Interrogación UC"
     }
         </span>
-        ${directRetrieval ? "" : '<button class="btn-ghost" onclick="toggleHint()">💡 Ver Pista</button>'}
+        ${directRetrieval ? "" : `<button class="btn-ghost" id="btn-lesson-hint" aria-controls="question-hint"
+          aria-expanded="${hintVisible}" onclick="toggleHint()">💡 Ver Pista</button>`}
       </div>
 
       <div class="question-prompt">${formatInlineMarkdown(q.prompt)}</div>
 
       ${renderStudyOptions(q, selectedOption, answeredCurrent)}
 
-      ${directRetrieval ? "" : `<div id="question-hint" class="hint-box" style="display:none">
+      ${directRetrieval ? "" : `<div id="question-hint" class="hint-box" ${hintVisible ? "" : "hidden"}>
         <strong>Pista:</strong> ${formatInlineMarkdown(q.hint)}
       </div>`}
 
@@ -774,10 +783,18 @@ function renderLessonStep() {
 }
 
 function toggleHint() {
-  const el = document.getElementById("question-hint");
-  if (!el) return;
-  el.style.display = el.style.display === "none" ? "block" : "none";
-  renderMath(el);
+  const hint = document.getElementById("question-hint");
+  if (STUDY_PENDING || !hint) return;
+  const session = LESSON_SESSION;
+  if (!session.answeredCurrent && !session.hintUsed) {
+    return requestStudy({
+      kind: "lesson", action: "hint", slot: session.slot, session_id: session.id,
+      step: session.stepIndex, answered: session.answers.length,
+    });
+  }
+  hint.hidden = !hint.hidden;
+  document.getElementById("btn-lesson-hint").setAttribute("aria-expanded", String(!hint.hidden));
+  renderMath(hint);
 }
 
 function selectQuestionOption(idx) {
@@ -810,7 +827,7 @@ function nextLessonStep(answer = {}) {
   const session = LESSON_SESSION;
   return requestStudy({
     kind: "lesson", action: "advance", slot: session.slot, session_id: session.id,
-    step: session.stepIndex, answered: session.answers.length, ...answer,
+    step: session.stepIndex, answered: session.answers.length, tracks_hint: true, ...answer,
   });
 }
 
