@@ -3,15 +3,19 @@
 import hashlib
 import random
 import uuid
+from collections import Counter, defaultdict
 
 import diagnostic
 from generators import generate_parametric_questions
 
 
+RETENTION_TASKS = {"retention_7d": 7, "retention_14d": 14}
+DAY_SECONDS = 86400
 LESSON_TASKS = {
     "lesson", "review", "recovery", "prerequisite_check", "anticipation", "practice", "quiz_review",
-}
-DIRECT_TASKS = {"review", "prerequisite_check", "quiz_review"}
+} | RETENTION_TASKS.keys()
+DIRECT_TASKS = {"review", "prerequisite_check", "quiz_review"} | RETENTION_TASKS.keys()
+INDEPENDENT_TASKS = DIRECT_TASKS | {"quiz"}
 MIN_QUIZ_TOPICS = 2
 
 
@@ -103,6 +107,7 @@ def advance_lesson(progress, session, body, now_ts):
             confirm_answer(
                 progress, session, questions[step - 1], body["choice"], now_ts,
                 topic_id=session["topic"]["id"], task_type=task_type, hint_used=hint_used,
+                active_ms=body.get("active_ms"),
             )
         return False
     if step != len(answers):
@@ -120,8 +125,10 @@ def valid_choice(choice, question):
     return choice
 
 
-def confirm_answer(progress, session, question, choice, now_ts, *, topic_id, task_type, hint_used):
+def confirm_answer(progress, session, question, choice, now_ts, *, topic_id, task_type, hint_used, active_ms):
     choice = valid_choice(choice, question)
+    if not valid_active_ms(active_ms):
+        raise ValueError("La duración de la respuesta no es válida.")
     question_index = len(session["answers"])
     session["answers"].append(choice)
     progress.setdefault("first_attempts", []).append({
@@ -130,10 +137,131 @@ def confirm_answer(progress, session, question, choice, now_ts, *, topic_id, tas
         "task_type": task_type,
         "question_index": question_index,
         "prompt_key": prompt_key(question["prompt"]),
+        "family": question.get("family"),
         "correct": choice == question["correct_index"],
         "hint_used": hint_used,
+        "active_ms": active_ms,
         "answered_ts": now_ts,
     })
+
+
+def valid_active_ms(value):
+    return value is None or (type(value) is int and 0 <= value <= 2**53 - 1)
+
+
+def valid_attempt(item):
+    if not isinstance(item, dict):
+        return False
+    timestamp = item.get("answered_ts")
+    index = item.get("question_index")
+    family = item.get("family")
+    hint = item.get("hint_used")
+    return (
+        all(isinstance(item.get(key), str) for key in ("session_id", "topic_id", "task_type", "prompt_key"))
+        and type(index) is int and index >= 0
+        and type(timestamp) in (int, float) and -8.64e12 <= timestamp <= 8.64e12
+        and type(item.get("correct")) is bool
+        and (hint is None or type(hint) is bool)
+        and (family is None or isinstance(family, str))
+        and valid_active_ms(item.get("active_ms"))
+    )
+
+
+def retention_anchor(attempts):
+    return next((item for item in attempts if item["task_type"] not in RETENTION_TASKS), None)
+
+
+def retention_result(progress, lesson, correct):
+    topic_id = lesson["topic"]["id"]
+    attempts = [item for item in progress["first_attempts"] if item["topic_id"] == topic_id]
+    anchor = retention_anchor(attempts)
+    return {
+        "correct": correct,
+        "total": len(lesson["answers"]),
+        "intervening_attempts": sum(item["session_id"] != lesson["id"] for item in attempts[attempts.index(anchor) + 1:]),
+    }
+
+
+def learning_overview(progress, xp_logs, now_ts):
+    by_topic = defaultdict(list)
+    measured = set()
+    for item in progress.get("first_attempts", []):
+        by_topic[item["topic_id"]].append(item)
+        measured.add((item["session_id"], item["question_index"]))
+
+    undated = Counter()
+    pending_results = set()
+    for lesson in progress["lessons"].values():
+        undated[lesson["topic"]["id"]] += sum(
+            (lesson["id"], index) not in measured for index in range(len(lesson["answers"]))
+        )
+        if lesson["task_type"] in RETENTION_TASKS and lesson["result"] is None:
+            pending_results.add(lesson["id"])
+    quiz = progress["quiz"]
+    if quiz:
+        if len(quiz["answers"]) < len(quiz["variants"]):
+            pending_results.add(quiz["id"])
+        for index, variant in enumerate(quiz["variants"][:len(quiz["answers"])]):
+            if (quiz["id"], index) not in measured:
+                undated[variant["topic_id"]] += 1
+
+    last_session = {}
+    for log in xp_logs:
+        if log["task_type"] in LESSON_TASKS:
+            topic_id = log["topic_id"]
+            last_session[topic_id] = max(last_session.get(topic_id, log["created_ts"]), log["created_ts"])
+
+    topics = {}
+    for topic_id in by_topic.keys() | last_session.keys() | {tid for tid in undated if undated[tid]}:
+        attempts = by_topic[topic_id]
+        last_answer = max((item["answered_ts"] for item in attempts), default=None)
+        anchor = retention_anchor(attempts)
+        topics[topic_id] = {
+            "last_practice_ts": last_answer if last_answer is not None else last_session.get(topic_id),
+            "legacy_date": last_answer is None and topic_id in last_session,
+            "undated": undated[topic_id],
+            "windows": {
+                days: learning_counts(
+                    (item for item in attempts if now_ts - days * DAY_SECONDS <= item["answered_ts"] <= now_ts),
+                    pending_results,
+                )
+                for days in RETENTION_TASKS.values()
+            },
+            "controls": [
+                control_overview(progress, topic_id, task_type, anchor["answered_ts"], now_ts)
+                for task_type in RETENTION_TASKS
+            ] if anchor and topic_id in diagnostic.PILOT_TOPIC_IDS else [],
+        }
+    return topics
+
+
+def learning_counts(attempts, pending_results):
+    counts = {"answered": 0, "independent": 0, "correct_independent": 0, "timed": 0, "active_ms": 0, "family_missing": 0}
+    for item in attempts:
+        counts["answered"] += 1
+        if (item["session_id"] not in pending_results and item.get("hint_used") is False
+                and item["task_type"] in INDEPENDENT_TASKS):
+            counts["independent"] += 1
+            counts["correct_independent"] += int(item["correct"])
+        if item.get("active_ms") is not None:
+            counts["timed"] += 1
+            counts["active_ms"] += item["active_ms"]
+        counts["family_missing"] += int(not item.get("family"))
+    return counts
+
+
+def control_overview(progress, topic_id, task_type, anchor_ts, now_ts):
+    days = RETENTION_TASKS[task_type]
+    due_ts = anchor_ts + days * DAY_SECONDS
+    lesson = progress["lessons"].get(f"{topic_id}:{task_type}")
+    control = {"task_type": task_type, "days": days, "due_ts": due_ts}
+    if lesson:
+        return {
+            **control, "status": "completed" if lesson["result"] else "in_progress",
+            "result": lesson["result"], "started_ts": lesson["retention_started_ts"],
+            "elapsed_days": (lesson["retention_started_ts"] - anchor_ts) // DAY_SECONDS,
+        }
+    return {**control, "status": "available" if now_ts >= due_ts else "pending"}
 
 
 def quiz_question(variant):

@@ -6,12 +6,15 @@ let SELECTED_NODE_ID = null;
 let LESSON_SESSION = null;
 let QUIZ_SESSION = null;
 let STUDY_PENDING = false;
+let QUESTION_CLOCK = null;
 
-const DIRECT_TASKS = ["review", "prerequisite_check", "quiz_review"];
+const RETENTION_TASKS = { retention_7d: "Control a 7 días", retention_14d: "Control a 14 días" };
+const DIRECT_TASKS = ["review", "prerequisite_check", "quiz_review", ...Object.keys(RETENTION_TASKS)];
 const TASK_LABELS = {
   lesson: "Lección", review: "Repaso", quiz_review: "Repaso del quiz",
   recovery: "Recuperación guiada", prerequisite_check: "Comprobación de prerrequisito",
   anticipation: "Anticipación", practice: "Práctica",
+  ...RETENTION_TASKS,
 };
 
 // Active Diagnostic Session State
@@ -219,6 +222,7 @@ function renderTopBar() {
 
 function renderDashboard() {
   renderStudyCards();
+  renderLearning();
   renderWeeklyActivity();
   const queueEl = document.getElementById("task-queue-list");
   const recs = APP_STATE.recommendations || [];
@@ -350,6 +354,51 @@ function renderWeeklyActivity() {
         </li>`;
       }).join("")}
     </ul>`;
+}
+
+const PRACTICE_DATE = new Intl.DateTimeFormat("es-CL", {
+  dateStyle: "medium", timeStyle: "short", timeZone: "America/Santiago",
+});
+
+function formatActiveTime(ms) {
+  if (ms > 0 && ms < 1000) return "menos de 1 s";
+  const seconds = Math.floor(ms / 1000);
+  return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+}
+
+function renderLearning() {
+  const period = document.getElementById("learning-period");
+  if (!period) return;
+  const days = period.value;
+  const learning = APP_STATE.learning || {};
+  const rows = APP_STATE.topics.filter((topic) => learning[topic.id]);
+  document.getElementById("learning-topics").innerHTML = rows.length ? rows.map((topic) => {
+    const stats = learning[topic.id];
+    const { answered, independent, correct_independent, timed, active_ms, family_missing } = stats.windows[days];
+    const date = stats.last_practice_ts == null ? "Fecha sin registrar" : PRACTICE_DATE.format(stats.last_practice_ts * 1000);
+    const controls = stats.controls.map((control) => {
+      const label = RETENTION_TASKS[control.task_type];
+      if (control.status === "pending") {
+        return `<li>${label} · disponible desde ${PRACTICE_DATE.format(control.due_ts * 1000)}</li>`;
+      }
+      const action = { available: "Iniciar", in_progress: "Retomar", completed: "Ver resultado" }[control.status];
+      const score = control.result ? ` · ${control.result.correct}/${control.result.total} aciertos` : "";
+      const elapsed = control.elapsed_days == null ? "" : ` · iniciado al día ${control.elapsed_days}`;
+      return `<li>${label}${score}${elapsed}
+        <button class="btn-outline btn-sm" aria-label="${action} ${label.toLowerCase()}"
+          onclick="startLesson('${topic.id}', '${control.task_type}')">${action}</button></li>`;
+    }).join("");
+    return `<article class="learning-topic">
+      <h4>${formatInlineMarkdown(topic.title)}</h4>
+      <p class="study-meta">Última práctica · ${date}${stats.legacy_date ? " (cierre histórico)" : ""}</p>
+      <p>${answered} ${answered === 1 ? "respuesta" : "respuestas"} · ${independent
+        ? `<strong>${correct_independent}/${independent}</strong> aciertos sin ayuda` : "Sin resultados directos disponibles"}</p>
+      <p class="study-meta">Tiempo activo · ${timed ? `${formatActiveTime(active_ms)} · ${timed}/${answered} con tiempo` : "Sin registro"}</p>
+      ${family_missing ? `<p class="study-meta">${family_missing}/${answered} sin familia registrada</p>` : ""}
+      ${stats.undated ? `<p class="study-meta">${stats.undated} ${stats.undated === 1 ? "respuesta anterior sin fecha" : "respuestas anteriores sin fecha"}</p>` : ""}
+      ${controls ? `<ul class="learning-controls">${controls}</ul>` : ""}
+    </article>`;
+  }).join("") : '<p class="study-meta">Confirma una respuesta para empezar a registrar tu práctica.</p>';
 }
 
 function renderPrerequisites(topic, byId) {
@@ -527,8 +576,76 @@ function renderCoursesCatalog() {
    INTERACTIVE MICRO-LESSON & PRACTICE ENGINE
    ============================================================================ */
 
+const QUESTION_TIME_PREFIX = "matuc_question_time:";
+const STUDY_IDLE_MS = 60_000;
+
+function pauseQuestionClock() {
+  const clock = QUESTION_CLOCK;
+  if (!clock || clock.startedAt === null) return;
+  clock.elapsed += Math.min(performance.now(), clock.activeUntil) - clock.startedAt;
+  clock.startedAt = null;
+  try {
+    sessionStorage.setItem(clock.key, String(clock.elapsed));
+  } catch (_) {}
+}
+
+function syncQuestionClock() {
+  if (STUDY_PENDING || document.visibilityState !== "visible" || !document.hasFocus()
+      || !getAuthToken() || document.getElementById("lesson-modal").classList.contains("hidden")) {
+    pauseQuestionClock();
+    return;
+  }
+  const quizQuestion = QUIZ_SESSION?.status === "in_progress";
+  const lessonQuestion = !LESSON_SESSION?.answeredCurrent && LESSON_SESSION?.topic.questions[LESSON_SESSION.stepIndex - 1];
+  const session = quizQuestion ? QUIZ_SESSION : lessonQuestion && LESSON_SESSION;
+  if (!session) {
+    pauseQuestionClock();
+    QUESTION_CLOCK = null;
+    return;
+  }
+  const index = quizQuestion ? session.answered : session.stepIndex - 1;
+  const key = `${QUESTION_TIME_PREFIX}${session.id}:${index}`;
+  if (QUESTION_CLOCK?.key !== key) {
+    pauseQuestionClock();
+    let elapsed = 0;
+    try {
+      elapsed = Number(sessionStorage.getItem(key)) || 0;
+    } catch (_) {}
+    QUESTION_CLOCK = { key, elapsed, startedAt: null, activeUntil: 0 };
+  }
+  if (QUESTION_CLOCK.startedAt === null) {
+    QUESTION_CLOCK.startedAt = performance.now();
+    QUESTION_CLOCK.activeUntil = QUESTION_CLOCK.startedAt + STUDY_IDLE_MS;
+  }
+}
+
+function markStudyActivity() {
+  const clock = QUESTION_CLOCK;
+  if (!clock || clock.startedAt === null) return;
+  const now = performance.now();
+  if (now > clock.activeUntil) {
+    clock.elapsed += clock.activeUntil - clock.startedAt;
+    clock.startedAt = now;
+  }
+  clock.activeUntil = now + STUDY_IDLE_MS;
+}
+
+function clearQuestionTimes() {
+  QUESTION_CLOCK = null;
+  try {
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith(QUESTION_TIME_PREFIX)) sessionStorage.removeItem(key);
+    }
+  } catch (_) {}
+}
+
 async function requestStudy(payload, showModal = false) {
   if (STUDY_PENDING) return;
+  pauseQuestionClock();
+  const index = payload.kind === "quiz" ? payload.answered : payload.step - 1;
+  const questionKey = `${QUESTION_TIME_PREFIX}${payload.session_id}:${index}`;
+  const timedKey = Object.hasOwn(payload, "choice") && QUESTION_CLOCK?.key === questionKey && questionKey;
+  if (timedKey) payload = { ...payload, active_ms: Math.round(QUESTION_CLOCK.elapsed) };
   STUDY_PENDING = true;
   const modal = document.getElementById("lesson-modal");
   const footer = document.getElementById("lesson-footer");
@@ -546,6 +663,12 @@ async function requestStudy(payload, showModal = false) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "No se pudo guardar el paso.");
     if (getAuthToken() !== token) return;
+    if (timedKey) {
+      QUESTION_CLOCK = null;
+      try {
+        sessionStorage.removeItem(timedKey);
+      } catch (_) {}
+    }
     APP_STATE = data.state;
     renderAll();
     if (payload.kind === "quiz") {
@@ -560,6 +683,7 @@ async function requestStudy(payload, showModal = false) {
       }
       LESSON_SESSION = {
         topic, id, slot, answers,
+        taskType: task_type,
         directRetrieval: DIRECT_TASKS.includes(task_type),
         stepIndex: step,
         selectedOption,
@@ -587,6 +711,7 @@ async function requestStudy(payload, showModal = false) {
   } finally {
     STUDY_PENDING = false;
     buttons.forEach((button) => { button.disabled = false; });
+    syncQuestionClock();
   }
 }
 
@@ -603,16 +728,17 @@ function openQuiz(restartFrom) {
 }
 
 function closeLessonModal() {
+  pauseQuestionClock();
   const modal = document.getElementById("lesson-modal");
   modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
 }
 
-function renderStudyOptions(question, choice, confirmed = false) {
+function renderStudyOptions(question, choice, confirmed = false, reveal = confirmed) {
   return `<div class="options-grid" id="question-options">${question.options.map((option, index) => {
     let state = choice === index ? "selected" : "";
-    if (confirmed && index === question.correct_index) state = "correct";
-    else if (confirmed && index === choice) state = "wrong";
+    if (reveal && index === question.correct_index) state = "correct";
+    else if (reveal && index === choice) state = "wrong";
     return `<button class="option-btn ${state}" onclick="selectQuestionOption(${index})"
       aria-pressed="${choice === index}" ${confirmed ? "disabled" : ""}>
       <span class="option-key">${"ABCD"[index] || index + 1}</span>
@@ -661,10 +787,11 @@ function renderQuiz() {
 }
 
 function renderLessonStep() {
-  const { topic, stepIndex, directRetrieval } = LESSON_SESSION;
+  const { topic, stepIndex, directRetrieval, taskType } = LESSON_SESSION;
   const totalQuestions = topic.questions.length;
+  const retentionLabel = RETENTION_TASKS[taskType];
 
-  document.getElementById("lesson-course-tag").textContent = `${topic.course_name} · Semestre ${topic.semester}`;
+  document.getElementById("lesson-course-tag").textContent = retentionLabel || `${topic.course_name} · Semestre ${topic.semester}`;
   document.getElementById("lesson-title").textContent = topic.title;
 
   // Los repasos y las comprobaciones comienzan con el primer problema.
@@ -738,6 +865,11 @@ function renderLessonStep() {
     const { selectedOption, answeredCurrent, hintUsed } = LESSON_SESSION;
     const correct = selectedOption === q.correct_index;
     const hintVisible = hintUsed && !answeredCurrent;
+    let buttonLabel = retentionLabel ? "Confirmar respuesta" : "Verificar respuesta";
+    if (answeredCurrent) {
+      const finishLabel = retentionLabel ? "Finalizar control" : "Finalizar y registrar XP";
+      buttonLabel = stepIndex === totalQuestions ? finishLabel : "Siguiente problema";
+    }
 
     bodyEl.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.55rem">
@@ -752,13 +884,13 @@ function renderLessonStep() {
 
       <div class="question-prompt">${formatInlineMarkdown(q.prompt)}</div>
 
-      ${renderStudyOptions(q, selectedOption, answeredCurrent)}
+      ${renderStudyOptions(q, selectedOption, answeredCurrent, answeredCurrent && !retentionLabel)}
 
       ${directRetrieval ? "" : `<div id="question-hint" class="hint-box" ${hintVisible ? "" : "hidden"}>
         <strong>Pista:</strong> ${formatInlineMarkdown(q.hint)}
       </div>`}
 
-      ${answeredCurrent ? `
+      ${answeredCurrent && !retentionLabel ? `
         <div class="feedback-banner ${correct ? "ok" : "err"}">
           <strong>${correct ? "✓ ¡Correcto!" : "✗ Respuesta incorrecta."}</strong>
           <p>${formatInlineMarkdown(q.explanation)}</p>
@@ -766,10 +898,10 @@ function renderLessonStep() {
     `;
 
     footerEl.innerHTML = `
-      <span style="font-size:0.8rem;color:var(--text-muted)">Atajo: teclas 1–4 para elegir, Enter para verificar</span>
+      <span class="study-meta">${retentionLabel ? "Soluciones disponibles al terminar" : "Atajo: teclas 1–4 para elegir, Enter para verificar"}</span>
       <div style="display:flex;gap:0.5rem">
         <button class="btn-primary" id="btn-Verify-Answer" onclick="verifyCurrentQuestion()" ${selectedOption === null ? "disabled" : ""}>
-          ${answeredCurrent ? (stepIndex === totalQuestions ? "Finalizar y registrar XP" : "Siguiente problema") : "Verificar respuesta"}
+          ${buttonLabel}
         </button>
       </div>
     `;
@@ -836,6 +968,22 @@ function renderLessonSummary() {
   const footerEl = document.getElementById("lesson-footer");
   const res = LESSON_SESSION.completionResponse;
   const totalQ = LESSON_SESSION.topic.questions.length;
+  if (RETENTION_TASKS[LESSON_SESSION.taskType]) {
+    bodyEl.innerHTML = `
+      <p><strong>${res.correct} de ${res.total}</strong> respuestas correctas sin ayuda</p>
+      <p class="study-meta">${res.intervening_attempts} respuestas adicionales entre la primera práctica registrada y el cierre del control.</p>
+      ${LESSON_SESSION.topic.questions.map((question, index) => {
+        const correct = LESSON_SESSION.answers[index] === question.correct_index;
+        return `<div class="feedback-banner quiz-feedback ${correct ? "ok" : "err"}">
+          <strong>Problema ${index + 1} · ${correct ? "Correcto" : "Incorrecto"}</strong>
+          <p>${formatInlineMarkdown(question.prompt)}</p>
+          <p>${formatInlineMarkdown(question.explanation)}</p>
+        </div>`;
+      }).join("")}`;
+    footerEl.innerHTML = '<button class="btn-primary" onclick="closeLessonModal()">Volver al panel</button>';
+    renderMath(bodyEl);
+    return;
+  }
 
   const implicitHtml =
     res && res.implicit_boosted && res.implicit_boosted.length > 0
@@ -1076,6 +1224,17 @@ function renderDiagnosticResult(bodyEl, footerEl, errorMessage, disabled) {
    ============================================================================ */
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("learning-period")?.addEventListener("change", () => {
+    if (APP_STATE) renderLearning();
+  });
+  document.addEventListener("visibilitychange", syncQuestionClock);
+  window.addEventListener("focus", syncQuestionClock);
+  window.addEventListener("pageshow", syncQuestionClock);
+  window.addEventListener("blur", pauseQuestionClock);
+  window.addEventListener("pagehide", pauseQuestionClock);
+  for (const event of ["pointerdown", "keydown", "scroll"]) {
+    window.addEventListener(event, markStudyActivity, { capture: true, passive: true });
+  }
   // Auth Gate Form
   const authForm = document.getElementById("auth-form");
   if (authForm) {
@@ -1161,6 +1320,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       const data = await res.json();
       APP_STATE = data.state;
+      if (preset === "reset") clearQuestionTimes();
       renderAll();
     });
   });
@@ -1204,6 +1364,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         const data = await res.json();
         if (data.state) {
+          clearQuestionTimes();
           APP_STATE = data.state;
           renderAll();
         }

@@ -920,6 +920,14 @@ PILOT_FAMILY_COUNTS = {
     "continuity_param": 2,
 }
 
+LEGACY_FAMILY_COUNTS = {
+    "logic_truth": 3,
+    "summation_telescopic": 3,
+    "vectors_dot_proj": 2,
+    "complex_modulus": 2,
+    "descriptive_stats": 2,
+}
+
 
 def generate_parametric_questions(generator_type, count=2, *, rng=None):
     fn = GENERATORS.get(generator_type, gen_inequality_abs)
@@ -929,28 +937,30 @@ def generate_parametric_questions(generator_type, count=2, *, rng=None):
         out = []
         while len(out) < count:
             batch = rng.sample(families, min(count - len(out), len(families)))
-            out.extend(fn(variant=family, rng=rng) for family in batch)
+            out.extend(dict(fn(variant=family, rng=rng), family=f"{generator_type}:{family}") for family in batch)
         return out
+
+    family_count = LEGACY_FAMILY_COUNTS.get(generator_type)
+    generator_id = generator_type if generator_type in GENERATORS else "inequality_abs"
+    family_count = family_count or PILOT_FAMILY_COUNTS.get(generator_id)
+
+    def make_question(variant):
+        if family_count:
+            return dict(fn(variant=variant), family=f"{generator_id}:{variant % family_count}")
+        return dict(fn(), family=generator_id)
 
     out = []
     seen_prompts = set()
     start_v = random.randint(0, 5)
     for idx in range(count * 4):
-        v = start_v + idx
-        try:
-            q = fn(variant=v)
-        except TypeError:
-            q = fn()
+        q = make_question(start_v + idx)
         if q["prompt"] not in seen_prompts:
             seen_prompts.add(q["prompt"])
             out.append(q)
         if len(out) >= count:
             break
     while len(out) < count:
-        try:
-            out.append(fn(variant=random.randint(0, 2)))
-        except TypeError:
-            out.append(fn())
+        out.append(make_question(random.randint(0, 2)))
     return out
 
 

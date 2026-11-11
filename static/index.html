@@ -106,6 +106,18 @@
           <p id="study-status" class="study-status" role="status"></p>
           <div id="task-queue-list" class="task-queue-list"></div>
 
+          <section class="stat-card learning-card" aria-labelledby="learning-title">
+            <div class="learning-header">
+              <h3 id="learning-title">Seguimiento por tema</h3>
+              <select id="learning-period" class="select-minimal" aria-label="Período de seguimiento">
+                <option value="7">Últimos 7 días</option>
+                <option value="14">Últimos 14 días</option>
+              </select>
+            </div>
+            <p class="study-meta">Los aciertos sin ayuda provienen de repasos directos, quizzes y controles. El tiempo activo mide la resolución de cada pregunta en la pestaña activa y se pausa al cambiar de ventana o tras un minuto sin interacción.</p>
+            <div id="learning-topics" aria-live="polite"></div>
+          </section>
+
           <!-- Quick Calibration Presets & Backup Sync -->
           <div class="presets-card">
             <div class="presets-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">

@@ -515,6 +515,7 @@ def get_full_state():
         "recommendations": recommendations,
         "activity_7d": list(week.values()),
         "study": _study_overview(progress, raw_states, _read_diagnostic_session(diagnostic_row)),
+        "learning": study.learning_overview(progress, xp_logs, now_ts),
         "backup_snapshot": {
             "version": 1,
             "exported_at": datetime.datetime.now().isoformat(),
@@ -687,7 +688,7 @@ def get_topic_lesson_payload(topic_id, *, seed=None, task_type="lesson"):
     count = 3 if generated_only else 2
     if t["generator_type"] == "continuity_param" and task_type == "review":
         dynamic_qs = generate_parametric_questions(t["generator_type"], count=2, rng=rng)
-        dynamic_qs.append(gen_continuous_radical_extension(rng=rng))
+        dynamic_qs.append(dict(gen_continuous_radical_extension(rng=rng), family="continuity_param:radical_extension"))
         rng.shuffle(dynamic_qs)
     else:
         dynamic_qs = generate_parametric_questions(t["generator_type"], count=count, rng=rng)
@@ -695,7 +696,10 @@ def get_topic_lesson_payload(topic_id, *, seed=None, task_type="lesson"):
             dynamic_qs = generate_parametric_questions(t["generator_type"], count=count, rng=rng)
     all_questions = dynamic_qs
     if not generated_only:
-        all_questions = [_shuffle_question_options(q, rng=rng) for q in t["questions"]] + dynamic_qs
+        all_questions = [
+            dict(_shuffle_question_options(q, rng=rng), family=f"curated:{study.prompt_key(q['prompt'])}")
+            for q in t["questions"]
+        ] + dynamic_qs
 
     return {
         **seed_info,
@@ -723,6 +727,8 @@ def record_completion(topic_id, correct_count, total_count, task_type="lesson"):
     """
     Registra un resultado agregado. Un fallo acorta el repaso de un tópico ya aprendido.
     """
+    if task_type in study.RETENTION_TASKS:
+        raise ValueError("Abre el control desde el panel para registrar cada respuesta.")
     init_db()
     conn = get_conn()
     try:
@@ -934,7 +940,8 @@ def _commit_writes(conn, cur, writes):
 def _study_overview(progress, states, diagnostic_session):
     lessons = [
         study.lesson_overview(lesson, slot)
-        for slot, lesson in progress["lessons"].items() if lesson["result"] is None
+        for slot, lesson in progress["lessons"].items()
+        if lesson["result"] is None and lesson["task_type"] not in study.RETENTION_TASKS
     ]
     last_slot = progress["last_lesson"]
     last = study.lesson_overview(progress["lessons"][last_slot], last_slot) if last_slot else None
@@ -947,11 +954,11 @@ def _study_overview(progress, states, diagnostic_session):
     }
 
 
-def _new_study_lesson(progress, topic_id, task_type):
+def _new_study_lesson(progress, topic_id, task_type, *, excluded_prompts=()):
     if topic_id not in diagnostic.PILOT_TOPIC_IDS:
         return study.new_lesson(get_topic_lesson_payload(topic_id, task_type=task_type), task_type)
     quiz = progress["quiz"]
-    excluded = {progress["quiz_reviews"].get(topic_id)}
+    excluded = set(excluded_prompts) | {progress["quiz_reviews"].get(topic_id)}
     if study.quiz_overview(quiz, 0)["status"] == "in_progress":
         excluded.update(
             study.prompt_key(study.quiz_question(variant)["prompt"])
@@ -978,7 +985,23 @@ def _lesson_transition(cur, progress, body, now):
             raise ValueError("Tema o tipo de práctica desconocido.")
         slot = f"{topic_id}:{task_type}"
         lesson = progress["lessons"].get(slot)
-        if lesson is None or lesson["result"] is not None:
+        if task_type in study.RETENTION_TASKS:
+            if lesson is None:
+                attempts = progress.get("first_attempts", [])
+                topic_attempts = [item for item in attempts if item["topic_id"] == topic_id]
+                anchor = study.retention_anchor(topic_attempts)
+                if topic_id not in diagnostic.PILOT_TOPIC_IDS or anchor is None:
+                    raise ValueError("Confirma una respuesta del tema en el piloto para habilitar los controles.")
+                control = study.control_overview(progress, topic_id, task_type, anchor["answered_ts"], now.timestamp())
+                if control["status"] != "available":
+                    raise ValueError("Aún no se cumple el intervalo de este control.")
+                diagnostic_session = _read_diagnostic_session(_diagnostic_row(cur))
+                excluded = set(progress["seen"]) | study.diagnostic_keys(diagnostic_session)
+                excluded.update(item["prompt_key"] for item in topic_attempts)
+                lesson = _new_study_lesson(progress, topic_id, task_type, excluded_prompts=excluded)
+                lesson["retention_started_ts"] = now.timestamp()
+                progress["lessons"][slot] = lesson
+        elif lesson is None or lesson["result"] is not None:
             lesson = _new_study_lesson(progress, topic_id, task_type)
             progress["lessons"][slot] = lesson
             if progress["last_lesson"] == slot:
@@ -998,13 +1021,16 @@ def _lesson_transition(cur, progress, body, now):
         answers = lesson["answers"]
         total = len(questions)
         correct = sum(choice == q["correct_index"] for choice, q in zip(answers, questions, strict=True))
+        lesson["step"] = total + 1
+        if task_type in study.RETENTION_TASKS:
+            lesson["result"] = study.retention_result(progress, lesson, correct)
+            return {**lesson, "slot": slot}, writes
         evidence = None
         if task_type == "review" and correct / total >= PASS_SCORE and os.environ.get("FIRE_ENABLED") != "0":
             evidence = fire.review_evidence(topic_id, questions, answers)
         lesson["result"], writes = _completion_writes(
             cur, topic_id, correct, total, task_type, now, progress, evidence=evidence
         )
-        lesson["step"] = total + 1
         progress["last_lesson"] = slot
         if (task_type == "quiz_review" and lesson["result"]["passed"]
                 and progress["quiz_reviews"].get(topic_id) == lesson.get("quiz_error")):
@@ -1036,7 +1062,7 @@ def _quiz_transition(cur, progress, body, now):
         variant = quiz["variants"][overview["answered"]]
         study.confirm_answer(
             progress, quiz, study.quiz_question(variant), body.get("choice"), now.timestamp(),
-            topic_id=variant["topic_id"], task_type="quiz", hint_used=False,
+            topic_id=variant["topic_id"], task_type="quiz", hint_used=False, active_ms=body.get("active_ms"),
         )
         if len(quiz["answers"]) == overview["total"]:
             results = study.quiz_results(quiz)
@@ -1308,7 +1334,8 @@ def import_backup_payload(payload, *, expected_revisions=None):
     if not isinstance(progress, dict):
         raise ValueError("El respaldo de las sesiones de estudio no es válido.")
     progress = {"first_attempts": [], **progress}
-    if progress.keys() != study.empty_state().keys() or not isinstance(progress["first_attempts"], list):
+    if (progress.keys() != study.empty_state().keys() or not isinstance(progress["first_attempts"], list)
+            or not all(study.valid_attempt(item) for item in progress["first_attempts"])):
         raise ValueError("El respaldo de las sesiones de estudio no es válido.")
     init_db()
     conn = get_conn()

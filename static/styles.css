@@ -584,6 +584,44 @@ body {
   margin-top: 0.8rem;
 }
 
+.learning-card {
+  margin-top: 1rem;
+}
+
+.learning-header,
+.learning-controls li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+}
+
+.learning-header {
+  margin-bottom: 0.5rem;
+}
+
+.learning-header h3 {
+  margin: 0;
+}
+
+.learning-topic {
+  border-top: 1px solid var(--border);
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+}
+
+.learning-topic p,
+.learning-controls li {
+  margin-top: 0.3rem;
+}
+
+.learning-controls {
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 560px) {
   .topbar, .workspace {
     padding: 0.85rem;

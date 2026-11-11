@@ -15,11 +15,11 @@ SEED = 1107
 
 
 class StudyTests(LearningAPITestCase):
-    def open_lesson(self, topic_id=TOPIC, task_type="lesson"):
-        with patch.object(engine.random, "getrandbits", return_value=SEED):
+    def open_lesson(self, topic_id=TOPIC, task_type="lesson", *, seed=SEED, status="200 OK"):
+        with patch.object(engine.random, "getrandbits", return_value=seed):
             return self.request(PATH, {
                 "kind": "lesson", "action": "open", "topic_id": topic_id, "task_type": task_type,
-            })
+            }, status=status)
 
     def lesson_step(self, session, **kwargs):
         return {
@@ -74,6 +74,8 @@ class StudyTests(LearningAPITestCase):
         choice = (question["correct_index"] + 1) % len(question["options"])
         stale = first["state"]["backup_snapshot"]
         self.request(PATH, self.lesson_step(session, choice=True), status="400 Bad Request")
+        for invalid in (-1, True, 1.5, "123"):
+            self.request(PATH, self.lesson_step(session, choice=choice, active_ms=invalid), status="400 Bad Request")
         self.request(PATH, self.lesson_step(session, action="hint"))
         self.assertEqual(self.first_attempts(), [])
 
@@ -81,12 +83,13 @@ class StudyTests(LearningAPITestCase):
         resumed = self.resume(session, client_backup=stale)["session"]
         self.assertTrue(resumed["hint_used"])
         self.assertEqual(resumed["answers"], [])
-        payload = self.lesson_step(resumed, choice=choice)
+        payload = self.lesson_step(resumed, choice=choice, active_ms=23_400)
         with ThreadPoolExecutor(max_workers=2) as pool:
             outcomes = list(pool.map(lambda _: self.request(PATH, payload), range(2)))
         attempt = {
             "session_id": session["id"], "topic_id": TOPIC, "task_type": "lesson", "question_index": 0,
-            "prompt_key": study.prompt_key(question["prompt"]), "correct": False, "hint_used": True,
+            "prompt_key": study.prompt_key(question["prompt"]), "family": question["family"],
+            "correct": False, "hint_used": True, "active_ms": 23_400,
             "answered_ts": FixedDateTime.current.timestamp(),
         }
         for outcome in outcomes:
@@ -96,7 +99,7 @@ class StudyTests(LearningAPITestCase):
             self.assertEqual(snapshot["xp_log"], [])
 
         FixedDateTime.current += datetime.timedelta(minutes=5)
-        changed_choice = self.lesson_step(session, choice=question["correct_index"], client_backup=stale)
+        changed_choice = self.lesson_step(session, choice=question["correct_index"], active_ms=30_000, client_backup=stale)
         self.assertEqual(self.request(PATH, changed_choice)["session"]["answers"], [choice])
         self.assertEqual(self.first_attempts(), [attempt])
         saved = self.request("/api/backup")
@@ -122,18 +125,106 @@ class StudyTests(LearningAPITestCase):
         legacy = self.request("/api/backup")
         progress = legacy["study"]["progress"]
         progress.pop("first_attempts")
-        progress["lessons"][second["slot"]].pop("hint_used")
+        legacy_lesson = progress["lessons"][second["slot"]]
+        legacy_lesson.pop("hint_used")
+        legacy_lesson["topic"]["questions"][1].pop("family")
         with patch.object(engine, "DB_PATH", os.path.join(os.path.dirname(engine.DB_PATH), "older.db")):
             restored = self.request("/api/backup", legacy)["state"]["backup_snapshot"]
             self.assertEqual(restored["topic_state"], legacy["topic_state"])
             self.assertEqual(restored["xp_log"], legacy["xp_log"])
             self.assertEqual(self.resume(second)["session"]["answers"], answered["answers"])
             self.assertEqual(self.first_attempts(), [])
+            self.assertEqual(self.request("/api/state")["learning"][TOPIC]["undated"], 1)
             self.confirm_lesson_answer(second, True)
             attempt, = self.first_attempts()
             self.assertEqual(attempt["question_index"], 1)
             self.assertTrue(attempt["correct"])
             self.assertIsNone(attempt["hint_used"])
+            self.assertIsNone(attempt["family"])
+
+    def test_tracking_windows_keep_historical_counts_and_unknown_measurements(self):
+        first = self.open_lesson(task_type="review")["session"]
+        self.confirm_lesson_answer(first, True)
+        old_backup = self.request("/api/backup")
+        old_attempt, = old_backup["study"]["progress"]["first_attempts"]
+        del old_attempt["active_ms"], old_attempt["family"]
+        FixedDateTime.current += datetime.timedelta(days=8)
+        self.request("/api/backup", old_backup)
+        resumed = self.resume(first)["session"]
+        second = self.request(PATH, self.lesson_step(resumed))["session"]
+        question = second["topic"]["questions"][1]
+        choice = (question["correct_index"] + 1) % len(question["options"])
+        response = self.request(PATH, self.lesson_step(second, choice=choice, active_ms=12_000))
+        stats = response["state"]["learning"][TOPIC]
+        self.assertEqual(stats["last_practice_ts"], FixedDateTime.current.timestamp())
+        self.assertEqual(stats["undated"], 0)
+        self.assertEqual(stats["windows"]["7"], {
+            "answered": 1, "independent": 1, "correct_independent": 0,
+            "timed": 1, "active_ms": 12_000, "family_missing": 0,
+        })
+        self.assertEqual(stats["windows"]["14"], {
+            "answered": 2, "independent": 2, "correct_independent": 1,
+            "timed": 1, "active_ms": 12_000, "family_missing": 1,
+        })
+        self.assertTrue(self.first_attempts()[1]["family"].startswith("limit_rational:"))
+        FixedDateTime.current = NOW + datetime.timedelta(days=14)
+        self.assertEqual(self.request("/api/state")["learning"][TOPIC]["windows"]["14"]["answered"], 2)
+        FixedDateTime.current += datetime.timedelta(seconds=1)
+        self.assertEqual(self.request("/api/state")["learning"][TOPIC]["windows"]["14"]["answered"], 1)
+
+    def test_retention_checks_are_due_at_7_and_14_days_and_use_fresh_questions(self):
+        baseline = self.open_lesson(task_type="review")["session"]
+        self.confirm_lesson_answer(baseline, True)
+        original = self.request("/api/backup")
+        prompts = {question["prompt"] for question in baseline["topic"]["questions"]}
+        FixedDateTime.current = NOW + datetime.timedelta(days=7, seconds=-1)
+        self.open_lesson(task_type="retention_7d", status="400 Bad Request")
+        FixedDateTime.current += datetime.timedelta(seconds=1)
+        self.open_lesson(task_type="retention_14d", status="400 Bad Request")
+
+        for days, seed, intervening in ((7, 31, 0), (14, 567, 3)):
+            FixedDateTime.current = NOW + datetime.timedelta(days=days)
+            task = f"retention_{days}d"
+            with self.subTest(task=task):
+                opened = self.open_lesson(task_type=task, seed=seed)
+                session = opened["session"]
+                self.assertEqual(session["step"], 1)
+                self.assertEqual(session["topic"], engine.get_topic_lesson_payload(TOPIC, seed=seed, task_type=task))
+                variants = {question["prompt"] for question in session["topic"]["questions"]}
+                self.assertEqual(len(variants), 3)
+                self.assertFalse(variants & prompts)
+                self.assertEqual({q["family"] for q in session["topic"]["questions"]}, {
+                    "limit_rational:0", "limit_rational:1", "limit_rational:2",
+                })
+                prompts.update(variants)
+                self.assertEqual(self.resume(session)["session"], session)
+                self.assertFalse(self.request(PATH, self.lesson_step(session, action="hint"))["session"]["hint_used"])
+                pending = self.confirm_lesson_answer(session, days == 7)
+                initial_counts = opened["state"]["learning"][TOPIC]["windows"]["14"]
+                pending_counts = pending["state"]["learning"][TOPIC]["windows"]["14"]
+                self.assertEqual(pending_counts["answered"], initial_counts["answered"] + 1)
+                self.assertEqual(pending_counts["independent"], initial_counts["independent"])
+                next_step = self.request(PATH, self.lesson_step(pending["session"]))
+                completed = self.finish_practice(next_step, days == 7)
+                result = {"correct": 3 if days == 7 else 0, "total": 3, "intervening_attempts": intervening}
+                self.assertEqual(completed["session"]["result"], result)
+                self.assertEqual(self.open_lesson(task_type=task)["session"], completed["session"])
+                controls = completed["state"]["learning"][TOPIC]["controls"]
+                control = next(control for control in controls if control["days"] == days)
+                self.assertEqual(control["status"], "completed")
+                self.assertEqual(control["result"], result)
+                self.assertEqual(control["started_ts"], FixedDateTime.current.timestamp())
+                self.assertEqual(control["due_ts"], NOW.timestamp() + days * 86400)
+
+        self.request("/api/complete", {"topic_id": TOPIC, "task_type": "retention_14d"}, status="400 Bad Request")
+        backup = self.request("/api/backup")
+        self.assertEqual(backup["topic_state"], original["topic_state"])
+        self.assertEqual(backup["xp_log"], original["xp_log"])
+        self.assertEqual(backup["profile"], original["profile"])
+        with patch.object(engine, "DB_PATH", os.path.join(os.path.dirname(engine.DB_PATH), "controls.db")):
+            restored = self.request("/api/backup", backup)["state"]
+            self.assertEqual([item["status"] for item in restored["learning"][TOPIC]["controls"]], ["completed", "completed"])
+            self.assertEqual(self.open_lesson(task_type="retention_7d")["session"]["topic"]["exercise_seed"], 31)
 
     def test_lesson_resume_with_saved_feedback_and_atomic_idempotent_completion(self):
         opened = self.open_lesson()
@@ -221,7 +312,7 @@ class StudyTests(LearningAPITestCase):
 
         self.assertEqual(self.open_quiz()["session"]["question"]["prompt"], first_prompt)
         for index in range(2):
-            quiz = self.request(PATH, self.quiz_answer(quiz, index == 0))
+            quiz = self.request(PATH, {**self.quiz_answer(quiz, index == 0), "active_ms": 2_400 + index})
         self.assertNotIn("results", quiz["session"])
         with patch.object(engine, "DB_PATH", os.path.join(os.path.dirname(engine.DB_PATH), "quiz.db")):
             self.request("/api/backup", quiz["state"]["backup_snapshot"])
@@ -244,6 +335,8 @@ class StudyTests(LearningAPITestCase):
         self.assertEqual([item["question_index"] for item in attempts], [0, 1, 2])
         self.assertEqual([item["topic_id"] for item in attempts], [item["topic_id"] for item in result["results"]])
         self.assertEqual([item["correct"] for item in attempts], [True, False, False])
+        self.assertEqual([item["active_ms"] for item in attempts], [2400, 2401, None])
+        self.assertTrue(all(item["family"] for item in attempts))
         self.assertTrue(all(item["task_type"] == "quiz" and item["hint_used"] is False for item in attempts))
         self.assertEqual(set(state["study"]["quiz_reviews"]), errors)
         self.assertEqual({task["topic_id"] for task in state["recommendations"] if task["task_type"] == "quiz_review"}, errors)

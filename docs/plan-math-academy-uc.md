@@ -168,17 +168,23 @@ En una lección guiada, el servidor registra la solicitud de pista antes de most
 
 **Evidencia.** Pasaron 23 pruebas con `python -m unittest discover -s tests -v` y pasó `node --check static/app.js`. La API WSGI autenticada se probó con SQLite temporal, reloj controlado y semilla 1107. Se verificaron reanudación tras una pausa, primer envío simultáneo, reintento con otra alternativa, respaldo nuevo y antiguo, persistencia al abrir otra sesión y reversión de la última respuesta del quiz si falla el cierre. Una comprobación con DOM simulado verificó la selección de alternativa al abrir la pista, su reaparición al retomar la pregunta y el envío de la respuesta. Chrome sin interfaz se cerró antes de ejecutar la prueba. El uso de cuota no se midió.
 
+**Segundo corte al 11 de noviembre de 2026.** El módulo 7 queda implementado. El cronómetro suma el tiempo de resolución por pregunta mientras el modal está visible y la pestaña tiene foco. Usa un reloj monotónico y suspende la acumulación al cerrar, recargar, perder el foco o pasar un minuto sin interacción. El tiempo pendiente se conserva en la misma pestaña. Al confirmar, la duración se escribe con el primer intento y se incluye en el respaldo. Cada generador identifica su familia y los generadores con varios métodos identifican la rama utilizada. Los ejercicios curados se identifican por su enunciado fijo.
+
+El panel muestra por tema la última práctica observada, el total de respuestas, los aciertos sin ayuda con su denominador y la duración de las respuestas con cronómetro. Los períodos móviles de 7 y 14 días usan fechas de confirmación y se muestran en hora de Santiago. Los aciertos sin ayuda corresponden a práctica directa, quizzes y controles con pistas desactivadas. Los resultados de quizzes y controles aparecen al cierre. Los registros del primer corte contribuyen a los conteos con las mediciones disponibles. Las respuestas antiguas aún presentes en sesiones se muestran como sin fecha. En temas con solo actividad agregada, la fecha del último cierre sirve como referencia histórica.
+
+En cada tema del piloto se habilita un control a las 168 horas y otro a las 336 horas desde la primera respuesta registrada fuera de un control. Cada control tiene tres variantes inéditas con semilla guardada y muestra el día real de inicio, el resultado y cuántas respuestas adicionales del tema hubo entre la primera práctica y el cierre. Los controles registran evidencia de exactitud observada. Las reglas de maestría, estabilidad, fecha de repaso y XP se aplican al cierre de la práctica ordinaria. El día 7 puede aportar práctica intermedia al control del día 14.
+
+**Evidencia del segundo corte.** Pasaron 25 pruebas de Python y dos de JavaScript (`node --test tests/test_study_clock.cjs`), además de `node --check static/app.js`. Las pruebas con SQLite temporal y reloj fijo comprobaron el doble envío con tiempos distintos, el historial de respaldos de ambas versiones, los límites de las ventanas, la habilitación de controles a 7 y 14 días, el cambio de semilla, el conteo de práctica intermedia y la restauración de controles cerrados. Las pruebas de reloj comprobaron pausa, recarga, pérdida de foco, inactividad y reintento de red. Chrome sin interfaz con SQLite temporal verificó la recarga, el tiempo activo, la familia, los filtros del panel y el control del día 7. Los días se simularon con un reloj controlado.
+
 ## Próxima sesión
 
-Completar el segundo corte del módulo 7 con duración activa, familia de ejercicio y seguimiento por tema. Usar la fecha de confirmación para mostrar la última práctica observada. Si la próxima interrogación ya tiene fecha y temario, adelantar el módulo 9 para ese bloque.
+Cuando se solicite el módulo 8, partir por las preferencias de horario y una recomendación que respete los minutos disponibles. Si la próxima interrogación ya tiene fecha y temario, adelantar el módulo 9 para ese bloque.
 
 ```text
-Lee AGENTS.md y las secciones Próxima etapa y Próxima sesión de
-docs/plan-math-academy-uc.md y retoma desde Estado del módulo 7.
-Sobre el historial de primeros intentos, añade duración activa que
-excluya las pausas y familias de ejercicio identificables. Resume por
-tema los aciertos sin ayuda, los conteos, el tiempo y la última práctica.
-Prepara controles reproducibles a 7 y 14 días y marca los datos
-históricos ausentes. Verifica pausa, recarga, doble envío y restauración
-en SQLite temporal. Registra la evidencia y la siguiente acción.
+Lee AGENTS.md y el estado del módulo 7 en docs/plan-math-academy-uc.md.
+Para el primer corte del módulo 8, persiste días, minutos disponibles,
+ramos prioritarios y fechas de evaluación. Usa esas preferencias para
+proponer una sesión acotada y explicar el orden de sus tareas. Prueba
+con 0 y 20 minutos, una evaluación próxima y un cambio de día en
+America/Santiago. Registra la evidencia y el siguiente paso.
 ```
