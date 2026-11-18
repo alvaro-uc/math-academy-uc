@@ -49,15 +49,21 @@ def database():
 
 
 def overview():
+    now = time.time()
     with database() as cur:
         cur.execute("SELECT skill, COUNT(*) AS attempts, SUM(correct) AS correct FROM general_attempt GROUP BY skill")
         counts = {row["skill"]: row for row in cur.fetchall()}
+        # El cliente agrupa por fecha civil de Santiago, incluidos los cambios de hora.
+        cur.execute("SELECT created_ts, correct FROM general_attempt WHERE created_ts BETWEEN ? AND ?",
+                    (now - 8 * 86400, now))
+        recent = [dict(row) for row in cur.fetchall()]
     result = {}
     for skill, (title, example, _) in SKILLS.items():
         row = counts.get(skill, {"attempts": 0, "correct": 0})
         number = row["attempts"] + 1
         result[skill] = dict(title=title, example=example, number=number,
                              correct=row["correct"], prompt=exercise(skill, number)[0])
+    result["_summary"] = {"goal": 7, "recent": recent}
     return result
 
 

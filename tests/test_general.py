@@ -6,6 +6,20 @@ from test_mastery import LearningAPITestCase, NOW, TOPIC
 
 
 class GeneralRouteTests(LearningAPITestCase):
+    def test_existing_seven_correct_count_toward_goal_and_recent_activity(self):
+        skill = "arithmetic.multiply-by-digit"
+        now = NOW.timestamp()
+        with general.database() as cur:
+            for number in range(1, 8):
+                when = now - 9 * 86400 if number == 1 else now
+                answer = general.exercise(skill, number)[1]
+                cur.execute("INSERT INTO general_attempt VALUES (?, ?, ?, 1, ?)", (skill, number, answer, when))
+        with patch.object(general.time, "time", return_value=now):
+            data = self.request("/api/general")
+            self.assertEqual(data[skill]["correct"], data["_summary"]["goal"])
+            self.assertEqual(len(data["_summary"]["recent"]), 6)
+            self.assertEqual(data["algebra.linear-equation"]["correct"], 0)
+
     def test_route_switch_preserves_uc_and_each_first_attempt(self):
         self.request("/api/study", {"kind": "lesson", "action": "open", "topic_id": TOPIC, "task_type": "lesson"})
         uc = self.request("/api/backup")
