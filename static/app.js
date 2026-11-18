@@ -158,6 +158,10 @@ async function fetchState() {
     showAuthGate();
     return;
   }
+  if (document.body.classList.contains("general-route")) {
+    await loadGeneral();
+    return;
+  }
   try {
     const clientBackup = getLocalBackup();
     const res = clientBackup
@@ -1224,6 +1228,17 @@ function renderDiagnosticResult(bodyEl, footerEl, errorMessage, disabled) {
    ============================================================================ */
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (new URLSearchParams(location.search).get("ruta") === "general") {
+    document.body.classList.add("general-route");
+    document.title = "Matemáticas generales · Math Academy";
+    document.querySelector(".auth-title").textContent = "Matemáticas generales";
+    document.querySelector(".uc-badge").textContent = "Ruta general";
+    document.querySelector(".brand-subtitle").textContent = "De aritmética a matemáticas universitarias";
+    const link = document.getElementById("switch-route");
+    link.href = "/";
+    link.textContent = "← Volver a UC · Ciencia de Datos";
+    document.getElementById("general-view").hidden = false;
+  }
   document.getElementById("learning-period")?.addEventListener("change", () => {
     if (APP_STATE) renderLearning();
   });

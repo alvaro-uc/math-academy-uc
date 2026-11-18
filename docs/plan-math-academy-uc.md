@@ -2,6 +2,8 @@
 
 ## Objetivo y decisión
 
+**Actualización del 18 de noviembre de 2026.** El trabajo continúa con GPT-6.2 Astra. La prioridad actual es la ruta de matemáticas generales. La decisión inicial sobre el modelo y la secuencia UC se conserva a continuación como antecedente.
+
 Construir un entrenador personal gratuito y utilizable sin conexión para resolver matemáticas de la UC con autonomía. La primera meta es poder practicar un bloque de Introducción al Cálculo, descubrir lagunas, volver a practicar cuando toque y resolver una variante nueva varios días después.
 
 Usar **Codex con GPT-6.1 Sol en razonamiento medio**, si está en el selector de la cuenta, y continuar sobre el repositorio actual. Codex aporta acceso al código, edición y pruebas. REA aporta herramientas MCP o CLI de inspección técnica para un agente y puede convivir con Codex, Claude Code o Gemini CLI. Las capturas, la descripción del sistema experto, las fórmulas publicadas y el código local bastan para iniciar este trabajo. REA tendría valor si aparece una pregunta concreta sobre un comportamiento visible o un artefacto local y hay una observación específica que la herramienta puede aportar. Su instalación y las herramientas adicionales consumen tiempo de preparación y contexto. Esta evaluación se hizo leyendo la documentación de REA. [Repositorio de REA](https://github.com/morluto/rea#readme), [modelos en Codex](https://learn.chatgpt.com/docs/models).
@@ -177,6 +179,20 @@ En cada tema del piloto se habilita un control a las 168 horas y otro a las 336 
 **Evidencia del segundo corte.** Pasaron 25 pruebas de Python y dos de JavaScript (`node --test tests/test_study_clock.cjs`), además de `node --check static/app.js`. Las pruebas con SQLite temporal y reloj fijo comprobaron el doble envío con tiempos distintos, el historial de respaldos de ambas versiones, los límites de las ventanas, la habilitación de controles a 7 y 14 días, el cambio de semilla, el conteo de práctica intermedia y la restauración de controles cerrados. Las pruebas de reloj comprobaron pausa, recarga, pérdida de foco, inactividad y reintento de red. Chrome sin interfaz con SQLite temporal verificó la recarga, el tiempo activo, la familia, los filtros del panel y el control del día 7. Los días se simularon con un reloj controlado.
 
 ## Próxima sesión
+
+### Ruta general · primer corte del 18 de noviembre de 2026
+
+El acceso del encabezado alterna entre la malla UC en `/` y el recorrido general en `/?ruta=general`, con la misma sesión autenticada. El catálogo recoge las trayectorias escolares alternativas, los fundamentos para adultos, los cursos de preparación y las ramas universitarias. Hay práctica local con variantes y corrección explicada para multiplicación por una cifra, ecuaciones lineales y pendiente de una cuadrática. El resto del catálogo indica el alcance por construir. El inventario y las agrupaciones proceden del [catálogo público](https://mathacademy.com/courses).
+
+**Evidencia y persistencia.** `general.py` genera cada variante a partir de la habilidad y el número de ejercicio. `general_attempt` conserva la primera respuesta, su corrección y la fecha. La interfaz muestra aciertos e intentos. Esta práctica todavía no asigna maestría, retención, plazos de repaso ni XP. El respaldo JSON de UC cubre la ruta UC. En local, el historial general se guarda en SQLite.
+
+**Cruce futuro.** Asociar cada habilidad general con las habilidades UC que evalúen la misma operación y dificultad, documentando si la cobertura es completa o parcial. Por ejemplo, evaluar la derivada de una cuadrática aporta evidencia de una parte del tema UC de continuidad y derivación. Antes de activar el cruce, probar ambas direcciones con un intento identificable por su ruta de origen y clave de ejercicio. Contabilizar cada evidencia una sola vez y mantener la actividad y los XP en la ruta de origen.
+
+**Siguiente corte de la réplica.** Construir una secuencia de habilidades de 4.º grado con prerrequisitos, diagnóstico de entrada y una siguiente tarea explicada. El trabajo previo con REA en Antigravity documentó páginas públicas y capturas del portal. Cuando haya suscripción, observar en una sesión propia la selección de curso, el diagnóstico, una lección con error, su reanudación y el siguiente repaso. Registrar por flujo la acción, el resultado visible y la diferencia con el piloto. Usar esos casos para ajustar la interfaz y las reglas locales. El comportamiento interno del servidor sigue sin verificarse.
+
+**Verificación.** Pasaron 27 pruebas Python con SQLite temporal y dos pruebas JavaScript, además del análisis de sintaxis de ambos scripts. En Chrome sin interfaz se verificaron el ingreso desde UC, una respuesta incorrecta, el regreso a UC y la persistencia del intento al volver a la ruta general. La prueba de API verificó doble envío simultáneo, restauración del respaldo UC y conservación de una lección UC abierta.
+
+### Retomar la ruta UC
 
 Cuando se solicite el módulo 8, partir por las preferencias de horario y una recomendación que respete los minutos disponibles. Si la próxima interrogación ya tiene fecha y temario, adelantar el módulo 9 para ese bloque.
 

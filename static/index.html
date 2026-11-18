@@ -40,6 +40,7 @@
       <div>
         <div class="brand-title">Math Academy <span class="uc-badge">UC · Ciencia de Datos</span></div>
         <div class="brand-subtitle">Entrenamiento Adaptativo · FIRe Spaced Repetition · Semestres 1–4</div>
+        <a class="route-link" id="switch-route" href="/?ruta=general">Ir a Matemáticas generales →</a>
       </div>
     </div>
 
@@ -78,6 +79,40 @@
 
   <!-- Main Workspace -->
   <main class="workspace">
+    <section id="general-view" hidden>
+      <h1>Matemáticas generales</h1>
+      <p class="section-desc">Explora los cursos por nivel. Las habilidades con práctica disponible guardan tus aciertos en esta ruta.</p>
+      <p id="general-status" role="status"></p>
+      <div id="general-catalog">
+        <section class="general-group">
+          <h2>Matemáticas escolares</h2>
+          <p>4.º y 5.º grado · 6.º a 8.º grado o preálgebra</p>
+          <details data-skill="arithmetic.multiply-by-digit"><summary>Practicar en 4.º grado · Multiplicación</summary></details>
+        </section>
+        <section class="general-group">
+          <h2>Educación secundaria</h2>
+          <ul>
+            <li>Tradicional · Álgebra I, Geometría, Álgebra II y Precálculo</li>
+            <li>Integrada · Matemáticas integradas I, II y III, seguidas de Precálculo</li>
+            <li>Integrada avanzada · Matemáticas integradas I, II y III con honores</li>
+          </ul>
+          <details data-skill="algebra.linear-equation"><summary>Practicar en Álgebra I · Ecuaciones</summary></details>
+        </section>
+        <section class="general-group">
+          <h2>Preparación de exámenes</h2>
+          <p>Fundamentos y preparación SAT · Fundamentos ACT y preparación ACT (anunciada) · Cálculo AP AB y BC</p>
+        </section>
+        <section class="general-group">
+          <h2>Fundamentos para adultos</h2>
+          <p>Fundamentos matemáticos I, II y III</p>
+        </section>
+        <section class="general-group">
+          <h2>Matemáticas universitarias</h2>
+          <p>Cálculo I y II, Álgebra lineal, Cálculo multivariable, Métodos de demostración, Ecuaciones diferenciales, Matemática discreta, Probabilidad y estadística, Matemáticas para aprendizaje automático y Métodos matemáticos para ciencias físicas I y II. Álgebra abstracta figura como curso anunciado.</p>
+          <details data-skill="calculus.quadratic-slope"><summary>Practicar en Cálculo I · Derivadas</summary></details>
+        </section>
+      </div>
+    </section>
     <!-- VIEW 1: DASHBOARD / ENTRENAMIENTO DIARIO -->
     <section id="view-dashboard" class="view-panel active">
       <div class="dashboard-grid">
@@ -257,6 +292,7 @@
 
   <script src="/vendor/katex/katex.min.js"></script>
   <script src="/vendor/katex/auto-render.min.js"></script>
+  <script src="/general.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

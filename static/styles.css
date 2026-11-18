@@ -29,6 +29,19 @@
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
+.route-link { color: var(--primary-hover); font-size: .85rem; font-weight: 600; }
+.general-route .topbar-tabs, .general-route .topbar-right > :not(#btn-logout),
+.general-route .view-panel { display: none; }
+#general-view { max-width: 880px; margin: auto; }
+#general-catalog { display: grid; gap: 1rem; margin-top: 1.25rem; }
+.general-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.general-group h2 { font-size: 1.1rem; margin-bottom: .5rem; }
+.general-group ul { padding-left: 1.25rem; color: var(--text-muted); }
+.general-group details { padding: .6rem 0; }
+.general-group summary { cursor: pointer; color: var(--primary-hover); font-weight: 600; }
+.general-group form { display: grid; justify-items: start; gap: .65rem; margin-top: .75rem; }
+.general-group input { padding: .45rem; width: 9rem; }
+
 * {
   box-sizing: border-box;
   margin: 0;

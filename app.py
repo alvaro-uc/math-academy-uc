@@ -16,6 +16,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import engine
+import general
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -126,6 +127,8 @@ def _dispatch_request(method, path, raw_body=b"", auth_header="", query_string="
         )
 
     if method == "GET":
+        if path == "/api/general":
+            return 200, "application/json; charset=utf-8", json.dumps(general.overview()).encode()
         if path == "/api/state":
             st = engine.get_full_state()
             return 200, "application/json; charset=utf-8", json.dumps(st, ensure_ascii=False).encode("utf-8")
@@ -172,6 +175,12 @@ def _dispatch_request(method, path, raw_body=b"", auth_header="", query_string="
             body = json.loads(raw_body.decode("utf-8")) if raw_body else {}
         except Exception as exc:
             return 400, "application/json; charset=utf-8", json.dumps({"error": f"JSON inválido: {exc}"}, ensure_ascii=False).encode("utf-8")
+
+        if path == "/api/general":
+            try:
+                return 200, "application/json; charset=utf-8", json.dumps(general.answer(body)).encode()
+            except ValueError as exc:
+                return 400, "application/json; charset=utf-8", json.dumps({"error": str(exc)}).encode()
 
         if path == "/api/state":
             engine.ensure_hydrated_from_client(body.get("client_backup"))
